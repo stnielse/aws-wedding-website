@@ -19,7 +19,9 @@ This is a self-hosted wedding website built by a professional software engineer 
 - PRIVACY. Public access is not allowed. Site access should be blocked by a sign-in code
 - RSVP management (guests look up by name or code, submit attendance + meal choice + plus-one)
 - Photo gallery (lots of photos, lightbox, infinite scroll or pagination)
+- Photos tastefully spread throughout every page too, not just isolated to the gallery.
 - Registry links page
+- Possible venmo or paypal API integration to allow guests to send money for honeymoon experiences direct rather than registry gift. Different experience icons, progress bar for total needed vs received, etc.
 - Hotel block info page
 - FAQ page
 - Django admin as the guest management dashboard — no custom admin UI needed
@@ -36,7 +38,7 @@ This is a self-hosted wedding website built by a professional software engineer 
 - Gunicorn as the application server, systemd-managed, behind nginx
 
 **Frontend:** React islands mounted into specific Django templates via Vite
-- Only two React components: `RsvpForm` and `Gallery`
+- Only two React components: `RsvpForm` and `Gallery`. NOTE: More might be necessary if payment app integration is pursued.
 - Everything else is plain Django templates + HTMX — no React router, no SPA
 - Vite bundles the React components; Django's `collectstatic` picks up the output
 - Initial data passed from Django to React via `<script type="application/json">` tags in templates — avoids an extra fetch on page load
@@ -395,12 +397,13 @@ sudo systemctl enable nginx && sudo systemctl start nginx
 
 ## Build order (strict — do not skip ahead)
 
-1. **Phase 0 — local scaffolding:** Django project, all apps, all models, admin registered, SQLite working, Vite scaffold, one React island mounted and confirmed working in a Django template locally
-2. **Phase 1 — core features:** Full RSVP flow working locally, all content pages (FAQ, hotel, registry) in templates + HTMX, gallery component working with local media storage
-3. **Phase 2 — Terraform:** Provision all AWS infrastructure. S3 bucket can be provisioned early if you want to test `django-storages` locally against real S3 before full deploy
-4. **Phase 3 — deploy:** EC2 server setup, gunicorn + nginx, GitHub Actions CI/CD, production settings wired up
-5. **Phase 4 — hardening:** HTTPS-only, rate limiting on RSVP endpoint, server-side file validation, RDS backup restore test, mobile responsiveness pass
-6. **Phase 5 — pre-wedding:** Light load test on RSVP form, final data export plan documented (pg_dump + S3 sync to local)
+1. **Phase 0 - minimal necessary site spun up** the URL should bring users to a minimal HLTM page, akin to a maintenance mode, saying the site is currently under construction. as of now it is DNS_PROBE_FINISHED_NXDOMAIN
+2. **Phase 1 — local scaffolding:** Django project, all apps, all models, admin registered, SQLite working, Vite scaffold, one React island mounted and confirmed working in a Django template locally
+3. **Phase 2 — core features:** Full RSVP flow working locally, all content pages (FAQ, hotel, registry) in templates + HTMX, gallery component working with local media storage
+4. **Phase 3 — Terraform:** Provision all AWS infrastructure. S3 bucket can be provisioned early if you want to test `django-storages` locally against real S3 before full deploy
+5. **Phase 4 — deploy:** EC2 server setup, gunicorn + nginx, GitHub Actions CI/CD, production settings wired up
+6. **Phase 5 — hardening:** HTTPS-only, rate limiting on RSVP endpoint, server-side file validation, RDS backup restore test, mobile responsiveness pass
+7. **Phase 6 — pre-wedding:** Light load test on RSVP form, final data export plan documented (pg_dump + S3 sync to local)
 
 Do not touch AWS until Phase 1 is complete and working locally. Debugging Django on EC2 behind nginx/gunicorn/CloudFront is significantly harder than debugging it locally.
 
