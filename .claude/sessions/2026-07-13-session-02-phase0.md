@@ -81,16 +81,58 @@ Module lives at `infra/phase0/` and contains:
 ## Progress
 
 - ✅ Confirmed Phase 0 scope with user (hosting = A, state = local, copy = minimal).
-- ⏳ Session log created.
-- ⏳ `.gitignore` broadened for `infra/**/` subdirs.
-- ⏳ `infra/phase0/` Terraform module written.
-- ⏳ `maintenance/index.html` written.
-- ⏳ `infra/phase0/README.md` written.
+- ✅ Session log created.
+- ✅ `.gitignore` broadened for `infra/**/` subdirs.
+- ✅ `infra/phase0/` Terraform module written.
+- ✅ `maintenance/index.html` written.
+- ✅ `infra/phase0/README.md` written.
+- ✅ Terraform CLI + AWS provider strict-pinned in `main.tf` after user chose 1.15.8 locally and registry showed 6.54.0 current.
+- ✅ Walked user through Terraform concepts and the module file-by-file (user is new to TF).
+- ⏭ **Not this session:** `terraform init/plan/apply` — user is still installing Xcode CLT + Terraform. Verification happens in Session 3.
 
 ## Files created / modified this session
 
-_(populated on session close)_
+- `.claude/sessions/2026-07-13-session-02-phase0.md` — this file
+- `.gitignore` — broadened Terraform patterns from `infra/*` to `infra/**/*`
+- `infra/phase0/main.tf` — provider config + strict version pins
+- `infra/phase0/variables.tf` — 4 input variables (domain, ACM ARN, HZ ID, project tag)
+- `infra/phase0/s3.tf` — bucket, ownership controls, public-access block, OAC bucket policy, `index.html` object
+- `infra/phase0/cloudfront.tf` — OAC + distribution with ACM cert, 403/404 custom error responses → 200 on `/index.html`
+- `infra/phase0/route53.tf` — A + AAAA alias records for apex and www
+- `infra/phase0/outputs.tf` — bucket name, distribution ID, distribution domain name
+- `infra/phase0/terraform.tfvars.example` — committed placeholder
+- `infra/phase0/maintenance/index.html` — self-contained static page (dark-mode-aware, no external assets)
+- `infra/phase0/README.md` — apply/verify/destroy runbook
+
+Not yet committed. Per working contract, user runs `git add` / `git commit` themselves.
 
 ## Session 3 handoff
 
-_(populated on session close)_
+**Goal:** get the maintenance page live.
+
+Prereqs the user needs to complete before Session 3 opens:
+
+1. Xcode CLT + `hashicorp/tap` Terraform installed (in progress).
+2. AWS CLI configured with the IAM admin user profile (`aws sts get-caller-identity` should return the admin user ARN, not root).
+3. Look up + capture (into `terraform.tfvars`):
+   - Apex domain name (Route 53 hosted zones page).
+   - ACM certificate ARN — must be in us-east-1, status Issued, covering apex + `www` SAN.
+   - Route 53 hosted zone ID for the apex domain.
+
+Session 3 flow:
+
+1. `cd infra/phase0 && cp terraform.tfvars.example terraform.tfvars` — user edits with real values.
+2. `terraform init` — installs provider 6.54.0, writes `.terraform.lock.hcl` (this file **is** committed; state and tfvars are not).
+3. `terraform plan` — walk through the plan output together; expect ~10 resources.
+4. `terraform apply` — blocks 10-20 min on CloudFront deployment.
+5. Run the verification block from `infra/phase0/README.md`.
+6. Session 3 also runs the **teardown drill** the Session 1 log called out: apply → verify → `terraform destroy` → confirm the account has no residue. Then apply again to leave the maintenance page live. This validates the teardown discipline before we accumulate more infra.
+
+Suggested session 3 slug: `2026-07-14-session-03-phase0-apply.md` (or whatever date it lands on).
+
+**Deferred to a later session:**
+
+- Building `cost-guard` and `wedding-copy-editor` subagents (Session 1 committed to both). Not needed until we start iterating on infra diffs, which won't happen until Phase 3.
+- Site-access-code storage (Django setting vs `SiteAccessCode` singleton) — Phase 2.
+- Photo intake workflow (admin upload vs `manage.py import_photos`) — Phase 2.
+- Rewriting the handoff's EC2 setup snippet from apt/ubuntu to dnf/ec2-user — Phase 4.
