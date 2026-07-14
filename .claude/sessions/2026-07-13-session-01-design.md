@@ -171,5 +171,17 @@ Immediately after `ExitPlanMode` approval, before any implementation:
 - ✅ Committed to 2 custom subagents (`cost-guard`, `wedding-copy-editor`)
 - ✅ Locked working-contract rule: Claude never runs git write ops
 - ✅ Locked working-contract rule: every session gets a dated `.claude/sessions/` log
+- ✅ Saved feedback memory: `feedback_git_operations.md`
+- ✅ Saved feedback memory: `feedback_session_logs.md`
+- ✅ Created repo-root `CLAUDE.md` with the working contract
 - ⏭ **Next:** Session 2 — Phase 0 maintenance page (S3 + CloudFront + Route 53 alias
   via a `infra/phase0/` Terraform module)
+
+## Files created / modified this session
+
+- `.claude/sessions/2026-07-13-session-01-design.md` — this file
+- `CLAUDE.md` — repo-root working contract
+
+(Memory files live outside the repo at
+`~/.claude/projects/-Users-stevennielsen-aws-wedding-website/memory/` and are not
+tracked in git.)
