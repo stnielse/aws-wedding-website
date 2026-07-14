@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Under construction</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f4ef;
+      --fg: #2b2622;
+      --muted: #6b625a;
+      --rule: #d9d1c5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14110e;
+        --fg: #ece7df;
+        --muted: #928a80;
+        --rule: #2f2a24;
+      }
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+      min-height: 100dvh;
+    }
+    main {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 2rem 1.5rem;
+      box-sizing: border-box;
+    }
+    .card {
+      max-width: 32rem;
+      text-align: center;
+    }
+    h1 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      margin: 0 0 1.25rem;
+    }
+    .rule {
+      width: 3rem;
+      height: 1px;
+      background: var(--rule);
+      margin: 0 auto 1.25rem;
+      border: 0;
+    }
+    p {
+      font-size: clamp(1rem, 2.2vw, 1.125rem);
+      line-height: 1.6;
+      color: var(--muted);
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>Under construction</h1>
+      <hr class="rule">
+      <p>Please check back soon.</p>
+    </div>
+  </main>
+</body>
+</html>
