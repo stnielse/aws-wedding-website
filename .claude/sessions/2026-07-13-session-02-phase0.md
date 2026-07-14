@@ -36,6 +36,7 @@ Nothing has been provisioned via Terraform yet — this module is the first.
 | Bucket `force_destroy` | `true`. The bucket only holds the maintenance HTML; teardown must not require manual object cleanup. |
 | Distribution reuse plan | The Phase 0 distribution is **not** intended to be extended in-place into the Phase 4 distribution. Session 1 floated reusing it, but folding EC2 as a second origin later while keeping the maintenance-mode error responses would leave landmines (error responses masking real 404s). Cleaner: `terraform destroy` this module when Phase 3 starts, then create the production distribution fresh in `infra/cloudfront.tf`. |
 | Deferred decisions | Site-access-code storage and photo intake workflow — both are Phase 2+ concerns and don't gate Phase 0. Revisit when Phase 2 starts. |
+| Version pin style | **Strict pins** on both the Terraform CLI (`1.15.8`) and the AWS provider (`6.54.0`) — user preference for exact versions over pessimistic constraints (`~>`) or floors (`>=`). Verified against the AWS provider 6.0 upgrade guide that none of the resources in this module (S3 bucket/policy/PAB/object, CloudFront distribution + OAC, Route 53 records, IAM policy document data source) have breaking changes touching our code. |
 
 ---
 
