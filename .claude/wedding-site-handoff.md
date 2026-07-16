@@ -1,7 +1,7 @@
 # Wedding Site — Claude Code Handoff
 
 ## Context
-This is a self-hosted wedding website built by a professional software engineer who wants full data ownership, privacy control, and resume-relevant AWS experience. The site aims to be live and stable by end of June 2026. All foundational AWS account setup and domain registration are already complete (see "What's already done" below).
+This is a self-hosted wedding website built by a professional software engineer who wants full data ownership, privacy control, and resume-relevant AWS experience. The site aims to be live and stable by end of August 2026. All foundational AWS account setup and domain registration are already complete (see "What's already done" below).
 
 ---
 
