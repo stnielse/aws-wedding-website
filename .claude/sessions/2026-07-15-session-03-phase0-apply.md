@@ -57,25 +57,47 @@ Prereqs confirmed at session start:
 
 ## Decisions locked this session
 
-_(populated as they come up)_
+| Area | Decision |
+|---|---|
+| `plan -out=tfplan` + `apply "tfplan"` workflow | Adopted as the standard local flow, not plain `terraform apply`. Guarantees the applied plan is exactly the reviewed plan (no drift between plan and apply), and habit-forms the pattern for CI. `tfplan` is a binary blob that can embed sensitive values — gitignored via `infra/**/tfplan` + `infra/**/*.tfplan`, deleted after each apply. |
+| `.terraform.lock.hcl` gitignore fix | Removed the line ignoring the lock file. Per HashiCorp guidance the lock file **is** committed — it pins provider binary hashes for reproducible `init` on other machines / CI. Same intent as our strict version pins in `main.tf`, but for the provider bits themselves. |
+| Long-blocking commands run by user | Locked in by [[feedback-long-running-commands]]. Terraform `apply` and `destroy` (10-30 min each) are run by the user; Claude runs quick commands only (init, plan, show, verification curls). |
 
 ---
 
 ## Progress
 
 - ✅ Session log created.
-- ⬜ `terraform init`
-- ⬜ `terraform plan` walkthrough
-- ⬜ `terraform apply`
-- ⬜ Verification block (curl + browser)
-- ⬜ Teardown drill (destroy → verify clean → re-apply)
+- ✅ `.gitignore` updates: added `infra/**/tfplan` + `infra/**/*.tfplan`; removed the erroneous ignore of `infra/**/.terraform.lock.hcl`.
+- ✅ `README.md` updated to use `plan -out=tfplan` → `apply "tfplan"` → `rm tfplan` in both the "First apply" and "Updating the maintenance HTML" sections; explained *why*; corrected resource count from ~10 to 11.
+- ✅ `terraform init` — provider 6.54.0 installed, `.terraform.lock.hcl` written.
+- ✅ `terraform plan -out=tfplan` walkthrough — 11 to add, 0 change, 0 destroy. Table of resources reviewed with user.
+- ✅ `terraform apply "tfplan"` — user ran; distribution reached `Deployed`.
+- ✅ Maintenance HTML edit → re-plan (1 change: `aws_s3_object.maintenance_index`) → apply → `aws cloudfront create-invalidation --paths '/index.html' '/'`. Confirmed the update-loop works end to end.
+- ✅ Verification block (curl) — 5/5 pass:
+
+  | Check | Result | Meaning |
+  |---|---|---|
+  | `curl -sI https://<apex>` | `200` | Distribution serving the page over HTTPS |
+  | `curl -sI http://<apex>` | `301` | HTTP correctly redirects to HTTPS at the edge |
+  | `curl -sI https://www.<apex>` | `200` | www alias works |
+  | `curl -sI https://<apex>/nonexistent-path` | `200` | Custom 403/404 → `/index.html` behavior works — every path shows the maintenance page |
+  | `curl -sI https://<bucket>.s3.amazonaws.com/index.html` | `403` | Bucket is genuinely private; only CloudFront can read via OAC |
+
+  Response headers on the apex confirm the request path: `via: ... (CloudFront)`, `server: AmazonS3` (upstream), `content-type: text/html; charset=utf-8`.
+
+- ⬜ Verification: browser check at mobile viewport (~375px) on apex + www.
+- ⬜ Teardown drill (destroy → verify clean → re-apply).
 
 ## Files created / modified this session
 
 - `.claude/sessions/2026-07-15-session-03-phase0-apply.md` — this file
+- `.gitignore` — added `infra/**/tfplan` + `infra/**/*.tfplan`; removed the erroneous ignore of `infra/**/.terraform.lock.hcl`
+- `infra/phase0/README.md` — swapped `plan`+`apply` for the `plan -out=tfplan` → `apply "tfplan"` → `rm tfplan` workflow in both "First apply" and "Updating the maintenance HTML" sections, with explanation of *why*; corrected resource count
+- `infra/phase0/.terraform.lock.hcl` — created by `terraform init` (now trackable after the gitignore fix)
+- `infra/phase0/maintenance/index.html` — user edit iterated on during the session (content tweak)
 
-_(Terraform will create `.terraform.lock.hcl` on init — that file is
-committed. `terraform.tfvars` and state files remain gitignored.)_
+Committed by the user. Per working contract, user runs `git add` / `git commit` themselves.
 
 ## Open questions / follow-ups
 
