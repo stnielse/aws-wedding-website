@@ -87,7 +87,10 @@ Prereqs confirmed at session start:
   Response headers on the apex confirm the request path: `via: ... (CloudFront)`, `server: AmazonS3` (upstream), `content-type: text/html; charset=utf-8`.
 
 - ⬜ Verification: browser check at mobile viewport (~375px) on apex + www.
-- ⬜ Teardown drill (destroy → verify clean → re-apply).
+- ✅ Teardown drill — `terraform destroy` removed everything cleanly, user
+  confirmed zero AWS residue, `terraform apply "tfplan"` re-created the
+  module and the site is back live. Discipline check passed on the first
+  attempt.
 
 ## Files created / modified this session
 
