@@ -102,6 +102,122 @@ Prereqs confirmed at session start:
 
 Committed by the user. Per working contract, user runs `git add` / `git commit` themselves.
 
+## Why the teardown drill matters (explanation captured for future reference)
+
+The drill is a **discipline test**, not a functional requirement. Nothing
+about the maintenance page needed the destroy — the page was already live
+and working. The drill proves something specific: **that `terraform
+destroy` on this module leaves zero AWS residue behind.**
+
+### Why that matters for this project specifically
+
+Handoff critical rule (`.claude/wedding-site-handoff.md:57`):
+`terraform destroy` must cleanly remove everything — no orphaned resources
+after the wedding.
+
+This isn't standard advice for most Terraform projects. Most infra is
+meant to live forever, so a slightly-leaky destroy doesn't matter — you
+just don't run destroy. This project is different: the whole site is
+temporary. Per [[project-timeline]], site lives through June 2027 and then
+gets torn down. Every orphaned bucket / snapshot / log group / ENI left
+behind is an ongoing bill we didn't consent to.
+
+### Why now, on 11 resources, instead of later on 40+
+
+Terraform's `destroy` isn't automatic — it's only as clean as the design.
+Common failure modes we're pre-empting:
+
+- S3 buckets with objects (needs `force_destroy = true` — we set it, `s3.tf:3`).
+- RDS instances with `deletion_protection = true` or `skip_final_snapshot = false`
+  (a final snapshot keeps billing forever).
+- CloudWatch log groups retained implicitly by other AWS services.
+- ENIs pinned by cyclic security-group references.
+- Anything created via console-click after apply — Terraform doesn't know
+  about it, won't destroy it.
+- `lifecycle { prevent_destroy = true }` flags — well-intentioned safety
+  that blocks teardown.
+
+Finding out about 5 of these at once, on Phase 4 with 40+ resources across
+VPC/RDS/EC2/IAM/CloudFront, is painful. Finding out there are 0 right
+now — on 11 resources we fully understand — was one `destroy` and 20 min.
+
+### What the drill validated
+
+1. **Every Phase 0 resource is in Terraform.** No console click-through.
+2. **Every resource is destroyable as-designed.** No missing flags, no
+   forgotten retention, no cyclic deps.
+3. **`terraform destroy` doesn't stall.** CloudFront disable+delete is
+   slow (15-30 min) but completes.
+4. **Re-apply is idempotent.** Same 11 resources after `destroy` →
+   `apply`. No globally-reserved bucket names, no residual state.
+
+Passed on the first attempt. Same discipline is required for the main
+`infra/` config in Phase 3+.
+
+### Sequence used
+
+```sh
+cd infra/phase0
+
+# 1. Destroy — ~15-30 min, most of it CloudFront disable → delete.
+terraform destroy
+
+# 2. Confirm zero residue:
+aws s3 ls | grep wedding-site                               # empty
+aws cloudfront list-distributions \
+  --query 'DistributionList.Items[?Aliases.Items[?contains(@,`kaitlynandsteven`)]]'   # empty
+aws route53 list-resource-record-sets \
+  --hosted-zone-id Z05627693KYG2Q1B7LJ6N \
+  --query 'ResourceRecordSets[?Type==`A` || Type==`AAAA`]'  # only Route 53 defaults, no wedding records
+
+# 3. Re-apply to leave the maintenance page live for its actual purpose.
+terraform plan -out=tfplan
+terraform apply "tfplan"
+rm tfplan
+```
+
+---
+
+## Session 4 handoff
+
+**Goal:** start Phase 1 — local Django scaffold (per handoff build order
+`.claude/wedding-site-handoff.md:398-408`).
+
+Phase 1 is a full context switch away from Terraform/AWS — nothing more
+gets provisioned until Phase 3. The work is in `backend/` (Django project,
+apps, models, admin, SQLite) and `frontend/` (Vite + React scaffold, one
+island mounted into a Django template).
+
+Suggested Session 4 opening:
+
+1. Scaffold `backend/` — `django-admin startproject config backend`, split
+   settings into `base.py` / `local.py` / `production.py` per handoff spec.
+2. Create the three apps: `rsvp`, `gallery`, `pages`. Wire models per
+   handoff (`.claude/wedding-site-handoff.md:117-167`). Register all in
+   Django admin.
+3. Confirm SQLite migrations run and admin loads locally.
+4. Scaffold `frontend/` with Vite + React. Mount one island (probably
+   `RsvpForm`) into a Django template to prove the integration point works
+   before we build the real components in Phase 2.
+5. Freeze Python + Node deps to exact versions (per
+   [[feedback-strict-version-pins]]).
+
+Suggested slug: `2026-07-XX-session-04-phase1-scaffold.md` (date it when
+we open it).
+
+**Deferred (still) to later sessions:**
+
+- `cost-guard` and `wedding-copy-editor` subagents (Session 1 committed —
+  wait for Phase 3 infra iteration to make them useful).
+- Site-access-code storage decision (Phase 2).
+- Photo intake workflow (Phase 2).
+- Rewriting the handoff's EC2 setup snippet from apt/ubuntu to dnf/ec2-user (Phase 4).
+- Updating the handoff doc's outdated "end of June 2026" language at
+  `.claude/wedding-site-handoff.md:5` — see [[project-timeline]] for the
+  real dates.
+
 ## Open questions / follow-ups
 
-_(populated as they come up)_
+- Mobile browser check on apex + www still to be done at leisure. If the
+  page needs a layout tweak, the update-loop (`plan -out=tfplan` →
+  `apply "tfplan"` → invalidate) is now well-exercised.
