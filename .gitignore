@@ -41,7 +41,6 @@ infra/**/*.tfstate
 infra/**/*.tfstate.*
 infra/**/*.tfvars
 !infra/**/*.tfvars.example
-infra/**/.terraform.lock.hcl
 infra/**/tfplan
 infra/**/*.tfplan
 infra/**/crash.log
