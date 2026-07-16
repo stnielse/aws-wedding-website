@@ -24,9 +24,20 @@ cp terraform.tfvars.example terraform.tfvars
 # edit terraform.tfvars: domain_name, acm_certificate_arn, hosted_zone_id
 
 terraform init
-terraform plan     # review — should be ~10 resources
-terraform apply
+terraform plan -out=tfplan   # review — should be 11 resources
+terraform apply "tfplan"     # applies exactly the reviewed plan
+rm tfplan                    # the plan file has no reuse value after apply
 ```
+
+Using `plan -out=<file>` + `apply <file>` (instead of a plain `terraform
+apply`, which re-plans against current state) guarantees the actions
+executed are exactly the ones reviewed — no drift between plan and apply if
+something in the real world changes in the intervening seconds. Habit-form
+it locally so the same workflow translates to CI later (plan job → human
+approval → apply job on the saved artifact).
+
+The plan file is a binary blob (view with `terraform show tfplan`) that can
+embed sensitive input values, so it's gitignored (`infra/**/tfplan`).
 
 CloudFront deployment takes 10-20 minutes; `apply` blocks until the
 distribution is `Deployed`. DNS propagation is usually seconds because both
@@ -56,7 +67,9 @@ legibly on desktop and mobile widths.
 Edit `maintenance/index.html`, then:
 
 ```sh
-terraform apply     # re-uploads the S3 object (etag = filemd5)
+terraform plan -out=tfplan   # confirm only the S3 object changes
+terraform apply "tfplan"     # re-uploads the object (etag = filemd5)
+rm tfplan
 
 # CloudFront caches for 24h by default. Invalidate to see the change now.
 aws cloudfront create-invalidation \
