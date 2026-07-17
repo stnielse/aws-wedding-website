@@ -61,21 +61,59 @@ No apps get created this session. No AWS. No Vite. That's Sessions 5 and 6.
 
 ## Progress
 
-- ⬜ Session log created (this file).
-- ⬜ `.claude/wedding-site-handoff.md` — Amendments section added.
-- ⬜ `.venv/` created at repo root with `python3.12`.
-- ⬜ `pip` upgraded inside the venv (baseline is what ships with 3.12).
-- ⬜ Django 5.2.x installed, exact version captured.
-- ⬜ `backend/` scaffold created via `django-admin startproject config backend`.
-- ⬜ Settings module split — `config/settings/{base,local,production}.py`.
-- ⬜ `manage.py` + `wsgi.py` wired to the new settings paths.
-- ⬜ `backend/requirements/{base,local,production}.txt` written, all exact-pinned.
-- ⬜ `python manage.py migrate --settings=config.settings.local` runs clean.
-- ⬜ `runserver` loads `/` and `/admin/` locally.
+- ✅ Session log created (this file).
+- ✅ `.claude/wedding-site-handoff.md` — Amendments section added (Phase 1 session split + venv convention + timeline correction).
+- ✅ `.venv/` created at repo root with `python3.12` (Python 3.12.13, pip 26.1.2 baseline — no upgrade needed).
+- ✅ Django 5.2.16 installed, exact version captured.
+- ✅ `backend/` scaffold created via `django-admin startproject config backend`.
+- ✅ Settings module split — `config/settings/{base,local,production}.py`; `__init__.py` empty.
+- ✅ `manage.py` default → `config.settings.local`; `wsgi.py` + `asgi.py` defaults → `config.settings.production`.
+- ✅ `backend/requirements/{base,local,production}.txt` written; **every** direct and transitive dep exact-pinned per [[feedback-strict-version-pins]].
+- ✅ `python manage.py check` — 0 issues.
+- ✅ `python manage.py migrate` — 18 built-in migrations (admin/auth/contenttypes/sessions) applied clean to `backend/db.sqlite3`. No project apps yet, so nothing else to migrate.
+- ✅ `runserver 127.0.0.1:8765` — GET `/` returns 200 (Django welcome page); GET `/admin/` returns 200 (login page). Both content-type `text/html`, titles confirm real Django output.
+
+### Digression captured (worth remembering)
+
+User asked mid-migrate why `manage.py migrate` reported 18 applied migrations
+when the repo has no `migrations/` directories. Answer: those come from
+Django's built-in apps in `INSTALLED_APPS` (`admin`, `auth`, `contenttypes`,
+`sessions`) whose migration files live inside the Django package in the
+venv (`.venv/lib/python3.12/site-packages/django/contrib/*/migrations/`),
+not our repo. Once Session 5 adds `rsvp`/`gallery`/`pages`, THOSE apps'
+migrations will live under `backend/<app>/migrations/` and DO get committed.
 
 ## Files created / modified this session
 
-_(to be filled in as work lands)_
+**Created:**
+- `.claude/sessions/2026-07-17-session-04-phase1-django-skeleton.md` — this log
+- `.venv/` — Python 3.12.13 virtualenv (gitignored)
+- `backend/manage.py` — Django CLI entrypoint (default settings = `config.settings.local`)
+- `backend/config/__init__.py`
+- `backend/config/urls.py` — startproject default (empty `admin/` route)
+- `backend/config/asgi.py` — default settings = `config.settings.production`
+- `backend/config/wsgi.py` — default settings = `config.settings.production`
+- `backend/config/settings/__init__.py` — empty; makes `settings/` a package
+- `backend/config/settings/base.py` — shared settings; `BASE_DIR` uses `.parent.parent.parent` because file is one level deeper than default startproject layout
+- `backend/config/settings/local.py` — SQLite, DEBUG=True, insecure key committed (Django's `django-insecure-` convention)
+- `backend/config/settings/production.py` — Postgres + S3, DEBUG=False, all secrets from `os.environ[...]` (fail-loud on missing). Uses Django 5.x `STORAGES` dict, not the pre-5.0 `DEFAULT_FILE_STORAGE` scalar shown in the original handoff.
+- `backend/requirements/base.txt` — Django + transitive, exact-pinned
+- `backend/requirements/local.txt` — `-r base.txt` (dev tooling added when needed)
+- `backend/requirements/production.txt` — `-r base.txt` + gunicorn, psycopg[3]+binary, django-storages, boto3, and every transitive, exact-pinned
+- `backend/db.sqlite3` — created by first `migrate` (gitignored)
+
+**Modified:**
+- `.claude/wedding-site-handoff.md` — new "Amendments" section between build order and critical rules (timeline correction, Phase 1 session split table, per-project venv convention)
+
+Committed by the user. Per working contract, user runs `git add` / `git commit` themselves.
+
+### One deviation from the original handoff, called out
+
+The handoff's production.py sketch (lines 259-263) uses the pre-Django-5.0
+`DEFAULT_FILE_STORAGE = '…'` setting. Django 5.x deprecated the scalar
+in favour of a `STORAGES` dict with `default` and `staticfiles` entries.
+`production.py` uses the 5.x form. If we ever revise the handoff itself
+(vs. layering amendments), that section should be modernized.
 
 ## Session 5 handoff
 
