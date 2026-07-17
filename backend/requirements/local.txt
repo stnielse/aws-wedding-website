@@ -1,0 +1,5 @@
+# Local development. Currently just the base — dev tooling (pytest,
+# ruff, etc.) gets added in whichever session first needs it, each
+# pinned exact.
+
+-r base.txt
