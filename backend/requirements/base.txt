@@ -1,0 +1,11 @@
+# Shared by all environments. Every version exact-pinned.
+# Includes Django's own transitive deps so a `pip install -r base.txt` is
+# fully reproducible without pip needing to resolve.
+#
+# When bumping Django, re-freeze in a clean venv and update these lines
+# together — the transitive versions listed below are what Django 5.2.16
+# was tested against.
+
+Django==5.2.16
+asgiref==3.12.1
+sqlparse==0.5.5
