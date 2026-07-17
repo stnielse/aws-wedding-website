@@ -120,6 +120,23 @@ by the old snippet.
 
 **Goal:** the three apps and their models — the middle slice of Phase 1.
 
+**Before touching anything:**
+
+- Read this file (Session 4 log) and the "Amendments" section of
+  `.claude/wedding-site-handoff.md` — the per-project venv convention and
+  the Phase 1 session split are captured there, not in the original handoff
+  body.
+- Every `python` / `pip` / `django-admin` invocation runs against
+  `/Users/stevennielsen/aws-wedding-website/.venv/bin/python` (or after
+  `source .venv/bin/activate`). Do **not** fall back to the system Python
+  (Anaconda 3.8) or Homebrew's 3.12 directly — the project venv is the
+  authority. See handoff Amendments → "Per-project Python virtualenv".
+- Start Django cmds from `backend/` (where `manage.py` lives).
+- `manage.py` already defaults to `config.settings.local`, so no
+  `--settings=` flag needed for local work.
+
+**Work:**
+
 1. `python manage.py startapp rsvp`, same for `gallery` and `pages` (all
    inside `backend/`).
 2. Add each to `INSTALLED_APPS` in `config/settings/base.py`.
@@ -131,8 +148,10 @@ by the old snippet.
 4. Register every model in each app's `admin.py`. `admin.site.register` is
    fine — nothing fancy yet.
 5. `makemigrations` + `migrate` (still on SQLite via `config.settings.local`).
-6. Confirm each model shows up in `/admin/` and can be created via the admin
-   UI.
+6. `python manage.py createsuperuser` — needed to actually log in to
+   `/admin/`. The current `db.sqlite3` from Session 4 has no users yet.
+7. `runserver`, log in at `/admin/`, confirm every new model shows up and
+   can be created via the admin UI.
 
 **Do not** touch `django-storages` or S3 yet — Photo's `ImageField` is fine
 against local `MEDIA_ROOT` at this stage. S3 wiring is a Phase 3 (or
