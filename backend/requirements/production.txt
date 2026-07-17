@@ -1,0 +1,28 @@
+# Production (EC2). Everything base has, plus:
+#   - gunicorn      — WSGI app server behind nginx
+#   - psycopg[3]    — PostgreSQL driver (RDS)
+#   - django-storages + boto3 — S3 media storage via CloudFront OAC
+#
+# All direct AND transitive deps exact-pinned. When bumping, re-freeze in a
+# clean venv (`pip install -r production.txt` freshly, then `pip freeze`)
+# and update as a set — mixed versions across a bump can be silently broken.
+
+-r base.txt
+
+gunicorn==26.0.0
+
+psycopg==3.3.4
+psycopg-binary==3.3.4
+
+django-storages==1.14.6
+boto3==1.43.50
+
+# Transitive (via boto3 / django-storages / gunicorn / psycopg)
+botocore==1.43.50
+jmespath==1.1.0
+packaging==26.2
+python-dateutil==2.9.0.post0
+s3transfer==0.19.1
+six==1.17.0
+typing_extensions==4.16.0
+urllib3==2.7.0
