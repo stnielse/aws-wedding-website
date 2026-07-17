@@ -256,7 +256,17 @@ DATABASES = {
     }
 }
 
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# Django 5.x `STORAGES` dict (replaces the pre-5.0 `DEFAULT_FILE_STORAGE` /
+# `STATICFILES_STORAGE` scalars). django-storages provides the S3 backend.
+STORAGES = {
+    'default': {
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
+
 AWS_STORAGE_BUCKET_NAME = os.environ['AWS_STORAGE_BUCKET_NAME']
 AWS_S3_REGION_NAME = os.environ['AWS_REGION']
 AWS_S3_CUSTOM_DOMAIN = os.environ['CLOUDFRONT_DOMAIN']  # serve media via CloudFront

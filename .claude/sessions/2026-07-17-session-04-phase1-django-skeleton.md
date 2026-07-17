@@ -107,13 +107,14 @@ migrations will live under `backend/<app>/migrations/` and DO get committed.
 
 Committed by the user. Per working contract, user runs `git add` / `git commit` themselves.
 
-### One deviation from the original handoff, called out
+### One deviation from the original handoff, resolved this session
 
-The handoff's production.py sketch (lines 259-263) uses the pre-Django-5.0
+The handoff's production.py sketch originally used the pre-Django-5.0
 `DEFAULT_FILE_STORAGE = '…'` setting. Django 5.x deprecated the scalar
 in favour of a `STORAGES` dict with `default` and `staticfiles` entries.
-`production.py` uses the 5.x form. If we ever revise the handoff itself
-(vs. layering amendments), that section should be modernized.
+Our `production.py` used the 5.x form from the start; the handoff sketch
+has now been updated in place to match, so future readers won't be misled
+by the old snippet.
 
 ## Session 5 handoff
 
