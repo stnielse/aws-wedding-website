@@ -409,6 +409,52 @@ Do not touch AWS until Phase 1 is complete and working locally. Debugging Django
 
 ---
 
+## Amendments (post-original-handoff)
+
+This section captures decisions and re-mappings made after the original handoff
+was written. The phase structure above is the source of truth for *what* gets
+built; this section is the source of truth for *how the sessions map onto the
+phases* and for any working conventions the original handoff didn't specify.
+
+### Timeline
+- Wedding is **early 2027**; the site should live through **June 2027** and
+  then be torn down. The original "end of August 2026" / "end of June 2026"
+  language above is stale — treat the 2027 dates as authoritative.
+
+### Phase 1 split across sessions
+
+The original handoff treats Phase 1 (local scaffolding) as one lump of work.
+In practice it's being split across three sessions so each one stays
+reviewable and has a clean stopping point:
+
+| Session | Slice of Phase 1 | Status |
+|---|---|---|
+| **Session 4** (this session, 2026-07-17) | Django project skeleton — `django-admin startproject config backend`, settings split (`base.py`/`local.py`/`production.py`), Python deps pinned. **No apps yet.** SQLite migrations run, admin loads. | in progress |
+| **Session 5** | The three apps (`rsvp`, `gallery`, `pages`) + models per handoff + admin registrations. Migrations for the new models. | pending |
+| **Session 6** | Vite + React scaffold + one island (probably `RsvpForm`) mounted into a Django template to prove the integration point works. Freeze Node deps. Completes Phase 1. | pending |
+
+Sessions 7+ pick up at **Phase 2 (core features)** as originally scoped. All
+subsequent phase numbers are unchanged; only the session numbering shifts.
+
+### Per-project Python virtualenv
+
+The user runs many Python projects on this machine, so this project must be
+fully isolated. Convention:
+
+- Virtualenv lives at repo root as `.venv/` (already covered by the
+  `.venv/` line in `.gitignore`).
+- Python interpreter is **3.12** (Homebrew's `python3.12`) — Django 5.2 LTS
+  supports 3.10-3.13; picking the middle keeps us on a mature, well-tested
+  target rather than the newest release.
+- Every backend command in this repo runs inside the venv. Activate with
+  `source .venv/bin/activate` from repo root before `python manage.py …`,
+  `pip install`, etc.
+- Never rely on the system Python (Homebrew's, or an Anaconda base env) for
+  project deps — dependency drift between projects is the exact thing the
+  venv exists to prevent.
+
+---
+
 ## Critical rules
 - Never use root AWS credentials for anything — IAM admin user only
 - Never commit `.env`, `terraform.tfvars`, `*.tfstate`, or any file containing secrets
