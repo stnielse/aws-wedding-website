@@ -1,3 +1,11 @@
 from django.db import models
 
-# Create your models here.
+
+class Photo(models.Model):
+    image = models.ImageField(upload_to='gallery/')  # goes to S3 in production
+    caption = models.CharField(max_length=300, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'uploaded_at']
