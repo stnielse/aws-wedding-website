@@ -9,3 +9,7 @@
 Django==5.2.16
 asgiref==3.12.1
 sqlparse==0.5.5
+
+# ImageField (gallery.Photo) requires Pillow. Same version needed in local
+# and production, so it lives here rather than in either env file.
+Pillow==12.3.0
