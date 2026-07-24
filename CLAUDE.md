@@ -9,6 +9,8 @@ Claude **never** runs git write operations on this repo. All `git add`, `git com
 
 Claude may propose a commit message or describe what would be staged, but must not execute the commands.
 
+The user stages and commits frequently throughout the session, so an end-of-session `git status` printout is redundant — do not run one as a wrap-up gesture. Running `git status` mid-session for a specific reason (e.g., confirming an in-flight edit landed) is still fine.
+
 ### Session logs
 Every non-trivial working session begins by creating a session log at `.claude/sessions/YYYY-MM-DD-session-NN-<slug>.md`. The log captures context, decisions locked, issues resolved, open questions, files touched, and a running progress checklist. See `.claude/sessions/2026-07-13-session-01-design.md` for the canonical template.
 
