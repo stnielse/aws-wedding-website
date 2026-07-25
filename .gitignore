@@ -17,6 +17,7 @@ ENV/
 *.sqlite3-journal
 backend/staticfiles/
 backend/media/
+backend/static/frontend/
 local_settings.py
 db.sqlite3
 
