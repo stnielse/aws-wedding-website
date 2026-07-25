@@ -463,6 +463,56 @@ fully isolated. Convention:
   project deps — dependency drift between projects is the exact thing the
   venv exists to prevent.
 
+### Logging — AWS CloudWatch across the stack
+
+The site must have thorough logging shipped to AWS CloudWatch Logs. The
+original handoff only mentions CloudWatch in the retention-policy critical
+rule; this amendment scopes the actual logging strategy.
+
+**Sources routed to CloudWatch:**
+- **Django app logs** — configured via `LOGGING` in `config/settings/production.py`. All `django.*` loggers plus per-app loggers (`rsvp`, `gallery`, `pages`) at INFO in prod; DEBUG stays in `local.py` only. Emit as JSON (structured logging) so CloudWatch Insights queries stay clean.
+- **Gunicorn (or the chosen WSGI server) logs** — access + error, via systemd `StandardOutput=journal` → CloudWatch Agent tails journald.
+- **Nginx access + error logs** — CloudWatch Agent tails `/var/log/nginx/*.log`.
+- **RDS PostgreSQL logs** — set `enabled_cloudwatch_logs_exports = ["postgresql"]` on the `aws_db_instance` resource in Terraform. Free RDS feature; only the CloudWatch Logs storage is billed.
+- **EC2 system logs** — `/var/log/messages` and cloud-init logs, for debugging boot / systemd startup issues.
+
+**Delivery mechanism:** the AWS-supplied **CloudWatch Agent** (installed on
+EC2 via `dnf install amazon-cloudwatch-agent` per the AL2023 setup). A
+single JSON config file lives in the repo (likely
+`infra/cloudwatch-agent-config.json`) and is shipped to the instance
+during provisioning. Preferred over `watchtower` (a direct-from-Python
+CloudWatch logging handler) because the agent survives app crashes and
+keeps IAM permissions on a single agent identity rather than the app
+process.
+
+**Log groups (one per source, all under a `/wedding/` prefix):**
+- `/wedding/django` — Django app
+- `/wedding/gunicorn` — WSGI server (via journald)
+- `/wedding/nginx/access` and `/wedding/nginx/error` — web tier
+- `/aws/rds/instance/<db-id>/postgresql` — AWS-managed group name; RDS log export writes here directly, do not override
+- `/wedding/system` — journald + cloud-init
+
+Every log group declared in Terraform gets `retention_in_days` set — **30
+days** as the default (short site life per the Timeline amendment).
+Override per-group only with a written reason. This reinforces the
+existing critical rule against unbounded retention.
+
+**IAM (least-privilege per critical rules):** the EC2 instance role gains
+a policy for `logs:CreateLogStream` and `logs:PutLogEvents` scoped to
+`arn:aws:logs:<region>:<acct>:log-group:/wedding/*:*` only — no wildcards
+on `Resource`, no `logs:CreateLogGroup` (Terraform pre-creates the groups
+so the agent never needs that permission at runtime).
+
+**Alarming (recommended, minimal):** one CloudWatch Metric Filter on
+`/wedding/django` counting `level=ERROR` events, feeding an SNS topic
+that emails `s.conwaynielsen@gmail.com`. Nginx 5xx spikes can pile on
+later if noise warrants it. Kept small on purpose — this is a wedding
+site, not a paging tier.
+
+**Phase placement:**
+- **Phase 2 (core features)** — land the app-side `LOGGING` dict + JSON formatter in `production.py`. Production-shaped logs exist from day one, even before there's a CloudWatch destination.
+- **Phase 3 (AWS provisioning)** — Terraform log groups + retention + instance-role policy + RDS log export toggle + CloudWatch Agent install/config on EC2 + the ERROR-count alarm.
+
 ---
 
 ## Critical rules
