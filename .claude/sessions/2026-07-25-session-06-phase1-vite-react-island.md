@@ -76,32 +76,175 @@ real RSVP form logic, Gallery real content, HTMX.
 
 ## Progress
 
-- [x] Session log created (this file).
-- [ ] Node 22 LTS installed (user action — `brew install node@22`).
-- [ ] `.nvmrc` written with exact installed version.
-- [ ] Corepack enabled; pnpm version pinned via `packageManager` field.
-- [ ] `frontend/` scaffolded with `pnpm create vite --template react`; direct deps exact-pinned; lockfile committed.
-- [ ] `vite.config.js` configured per handoff.
-- [ ] `main.jsx` island-mount pattern + `RsvpForm` / `Gallery` stubs.
-- [ ] `backend/templates/{base,rsvp}.html` created; `TEMPLATES.DIRS` wired.
-- [ ] `/rsvp/` view + URL wired.
-- [ ] `pnpm build` runs clean; `runserver` shows the mounted island at `/rsvp/`.
-- [ ] `pnpm dev` works for iteration.
-- [ ] Session log finalized (files touched, digressions, Session 7 handoff).
+- ✅ Session log created (this file).
+- ✅ Node 22 LTS installed by user via `brew install node@22` (v22.23.1 landed).
+- ✅ `.nvmrc` written at repo root with `22.23.1`.
+- ✅ Corepack enabled (`corepack enable`); pnpm pinned to `11.17.0` via the `packageManager` field in `frontend/package.json`.
+- ✅ `frontend/` scaffolded via `pnpm create vite@9.1.1 frontend --template react`; direct deps exact-pinned (stripped all `^`/`~`); `pnpm-lock.yaml` generated and committed-worthy.
+- ✅ `vite.config.js` set per handoff — `outDir: '../backend/static/frontend'`, `emptyOutDir: true`, `rollupOptions.input: 'src/main.jsx'`, plus stable `entryFileNames: 'assets/main.js'` (see digression on hashing below).
+- ✅ `frontend/src/main.jsx` rewritten with the rsvpRoot + galleryRoot island-mount pattern; `RsvpForm.jsx` and `Gallery.jsx` stubs added (both render their props as JSON for visual proof).
+- ✅ `backend/templates/base.html` and `backend/templates/rsvp.html` created; `TEMPLATES.DIRS` in `config/settings/base.py` now includes `BASE_DIR / 'templates'`.
+- ✅ `/rsvp/` wired via `rsvp/urls.py` (`app_name = 'rsvp'`, `path('', views.rsvp, name='index')`) included at `rsvp/` in `config/urls.py`; view is a bare `render(request, 'rsvp.html')`.
+- ✅ `pnpm build` produces `backend/static/frontend/assets/main.js` (190 KB); `runserver` serves the built bundle via `{% static %}`; user visually confirmed the RSVP island mounts at `http://127.0.0.1:8765/rsvp/` with real `csrf_token` in props.
+- ✅ `pnpm dev` verified — Vite dev server transforms JSX on the fly with HMR instrumentation intact.
+- ✅ Session log finalized (this section).
 
 ### Digressions worth remembering
 
-_(To fill in as we go.)_
+**Vite 8 dev server binds only to `localhost`, not `127.0.0.1`.** Vite's
+banner prints `http://localhost:5175/` but `curl http://127.0.0.1:5175/`
+hangs indefinitely. `curl http://localhost:5175/` and
+`curl http://[::1]:5175/` both work (macOS `/etc/hosts` maps `localhost`
+to both). Cost me a 120-second curl timeout on the first `pnpm dev` smoke
+test. If we ever run automated frontend smoke tests, always use `localhost`
+or pass `vite --host 127.0.0.1` explicitly.
+
+**Vite 8 hashes the entry filename by default.** First build emitted
+`main-J_CLQV2d.js` — the hash changes every build, which breaks any static
+`<script src="{% static 'frontend/assets/main.js' %}">` reference from a
+Django template. Workaround: set `rollupOptions.output.entryFileNames`,
+`chunkFileNames`, and `assetFileNames` to unhashed patterns. Cache-busting
+is still achievable in production by turning on
+`ManifestStaticFilesStorage` in `STORAGES['staticfiles']` — Django hashes
+during `collectstatic` and rewrites references. Punting that decision to
+Phase 3.
+
+**`STATICFILES_DIRS` was needed.** Django's `AppDirectoriesFinder` only
+looks inside app dirs (`rsvp/static/`, etc.), so `backend/static/frontend/`
+was invisible to `runserver`. Added `STATICFILES_DIRS = [BASE_DIR / 'static']`
+to `base.py`. Session 4's settings had `STATIC_URL` alone, which was enough
+until we started producing static assets outside an app dir.
+
+**create-vite@9 defaults to `oxlint`, not eslint.** The Oxc-based linter
+ships in the scaffold with an `.oxlintrc.json`. Kept as-is — no reason
+to swap to eslint for a one-island frontend. Worth remembering when
+reading unfamiliar `pnpm lint` output.
+
+**pnpm noted patch-newer versions than create-vite pinned.** `pnpm install`
+reported react 19.2.8 / vite 8.1.5 / oxlint 1.75.0 / plugin-react 6.0.4
+are all newer than what create-vite@9.1.1's templates recorded. Left
+pinned at create-vite's chosen versions for now — bumping to head is a
+follow-up (see open questions).
+
+**Homebrew corepack on Apple Silicon needs no sudo.** `corepack enable`
+symlinked `/opt/homebrew/bin/pnpm` → corepack's dispatcher without
+permission prompts. Apple Silicon Homebrew is user-owned. On Intel
+Homebrew (`/usr/local`) or a Linux box this may require sudo — worth
+remembering when we script the EC2 install later.
+
+**Django CSRF cookie is set on the first GET of `/rsvp/`.** The `Set-Cookie`
+header in the smoke-test response shows a fresh `csrftoken` was issued
+(1-year Max-Age, SameSite=Lax) — the `{% csrf_token %}` template tag
+triggered it. Behavior is normal; noting it because the RSVP submit view
+in Phase 2 will rely on that cookie's presence for POST validation.
 
 ## Files created / modified this session
 
-_(To fill in as we go.)_
+**Created:**
+- `.claude/sessions/2026-07-25-session-06-phase1-vite-react-island.md` — this log
+- `.nvmrc` — `22.23.1`
+- `frontend/` — full scaffold from `pnpm create vite@9.1.1 --template react`, then customized:
+  - `frontend/package.json` — rewritten with exact pins and `"packageManager": "pnpm@11.17.0"`
+  - `frontend/pnpm-lock.yaml` — generated by `pnpm install` (frozen transitive deps; commit this)
+  - `frontend/vite.config.js` — rewritten with build config per handoff + stable filenames
+  - `frontend/index.html` — rewritten as a dev harness (bare `rsvp-root` + mock `rsvp-data` JSON)
+  - `frontend/src/main.jsx` — rewritten with the two-island mount pattern from the handoff
+  - `frontend/src/RsvpForm.jsx` — new; renders "RSVP island mounted." plus props as JSON
+  - `frontend/src/Gallery.jsx` — new; symmetric stub for the Gallery island
+  - `frontend/.gitignore`, `frontend/.oxlintrc.json`, `frontend/README.md` — kept from scaffold as-is
+- `backend/templates/base.html` — minimal layout with `title`/`content`/`scripts` blocks
+- `backend/templates/rsvp.html` — extends base, drops `rsvp-data` JSON + `rsvp-root` div + script tag
+- `backend/rsvp/urls.py` — `app_name = 'rsvp'`, `path('', views.rsvp, name='index')`
+
+**Deleted from scaffold (demo cruft):**
+- `frontend/src/App.jsx`, `frontend/src/App.css`, `frontend/src/index.css`, `frontend/src/assets/`
+- `frontend/public/favicon.svg`, `frontend/public/icons.svg`
+
+**Modified:**
+- `.gitignore` — added `backend/static/frontend/` (Vite build output)
+- `backend/config/settings/base.py` — `TEMPLATES.DIRS` now `[BASE_DIR / 'templates']`; added `STATICFILES_DIRS = [BASE_DIR / 'static']`
+- `backend/config/urls.py` — imported `include`, added `path('rsvp/', include('rsvp.urls'))`
+- `backend/rsvp/views.py` — replaced boilerplate with `def rsvp(request): return render(request, 'rsvp.html')`
+
+**Also touched (not tracked by git):**
+- `backend/static/frontend/assets/main.js` — Vite build output (gitignored via the new rule)
+- `~/Library/Caches/node/corepack/` — corepack downloaded pnpm 11.17.0 into its cache
+- Ephemeral: two runserver background processes (ports 8765 and 5175) started + killed during smoke tests
 
 Per working contract, all `git add` / `git commit` is left to the user.
 
 ## Session 7 handoff
 
-_(To fill in at the end.)_
+**Goal:** Start Phase 2 — the first real user-facing flow. Per handoff
+`.claude/wedding-site-handoff.md`, Phase 2 covers the RSVP form
+(Guest lookup by token, form submission, RSVP DB write, error paths) and
+the Gallery browse view. Session 7 should pick one of those two and
+deliver it end-to-end (template + Django view + React island wiring +
+POST/GET plumbing + tests). RSVP is the higher-priority flow — recommend
+starting there.
+
+**Before touching anything:**
+
+- Read this file (Session 6 log) and Sessions 4-5.
+- Re-read the handoff's Phase 2 section for the token-URL scheme, the
+  Guest → RSVP relationship, and the expected submit endpoint shape.
+- `.venv/bin/python` for all Django commands; `pnpm` (already pinned via
+  corepack) for all frontend commands.
+- Vite 8 quirk: dev server is `http://localhost:5175/`, NOT
+  `http://127.0.0.1:5175/`. If you run automated frontend smoke tests,
+  use `localhost` or add `vite --host 127.0.0.1` to the dev script.
+- Every direct dep gets exact-pinned per [[feedback-strict-version-pins]].
+  Any new frontend dep added via `pnpm add <pkg>` — immediately strip the
+  `^` in `package.json` and reinstall.
+
+**Work (concrete steps for Session 7 if you take the RSVP path):**
+
+1. Decide the URL scheme: the handoff mentions token-scoped RSVP URLs
+   (`/rsvp/<token>/`). Migrate the current `/rsvp/` route to
+   `/rsvp/<token>/`, update the view to `Guest.objects.get(token=token)`
+   and pass guest data into `rsvp.html`, and add a `/rsvp/` landing that
+   asks for the token or shows an error.
+2. Add the submit endpoint: `rsvp/urls.py` — `path('<token>/submit/', views.submit, name='submit')`. The view accepts POST, validates CSRF, creates/updates an `RSVP` row for the guest, returns JSON.
+3. Update the `rsvp.html` template's `submitUrl` prop to use
+   `{% url 'rsvp:submit' token=guest.token %}` instead of the hardcoded
+   `/rsvp/submit/` placeholder.
+4. Build out `RsvpForm.jsx` for real: name confirm, attending yes/no,
+   plus-one, dietary notes, meal choice, submit button that POSTs to
+   `props.submitUrl` with `X-CSRFToken: props.csrfToken`.
+5. Add `django-vite` (pinned) if you want HMR-through-Django-runserver.
+   Otherwise document the "rebuild + refresh" flow: `pnpm build` writes
+   to `backend/static/frontend/`, then reload the Django page. For
+   iteration on component internals only, `pnpm dev` against the
+   `index.html` harness still works.
+6. Tests: at minimum a `TestCase` that GETs `/rsvp/<valid-token>/` (200,
+   rsvp-root in HTML) and one that POSTs `submit` with valid + invalid
+   payloads.
+
+**Do not** touch S3, `django-storages`, `django-vite` in production, or
+the Gallery flow yet — one feature at a time.
+
+## Open questions / follow-ups
+
+- **Bump direct deps to their latest patches?** `pnpm install` flagged
+  newer patch versions for react (19.2.8), vite (8.1.5), oxlint (1.75.0),
+  and `@vitejs/plugin-react` (6.0.4). We pinned to what create-vite@9.1.1
+  chose. Cheap follow-up: `pnpm up react react-dom @vitejs/plugin-react vite oxlint --latest` and update the exact pins in `package.json`.
+- **`django-vite` integration.** Deferred this session for a Phase 2+
+  decision. If we adopt it, pin the exact version and configure a
+  dev/prod switch (dev = read from Vite dev server, prod = read from
+  `collectstatic` output).
+- **Cache-busting for the built bundle.** Currently `main.js` is
+  unhashed. In production, decide between `ManifestStaticFilesStorage`
+  (Django-side hashing) or re-enabling Vite hashing + reading Vite's
+  `manifest.json` from a templatetag. Phase 3 concern.
+- **RSVP submit URL naming.** `rsvp.html` currently hardcodes
+  `/rsvp/submit/` in the JSON props. Session 7 must define `rsvp:submit`
+  in `rsvp/urls.py` and switch the template to `{% url %}`.
+- **`__str__` methods on models.** Still open from Session 5. Not
+  blocking; will come up as soon as we admin-edit a Guest.
+- **Handoff `apt`/`ubuntu` cleanup.** Still deferred to Phase 4.
+- **`cost-guard` and `wedding-copy-editor` subagents.** Still deferred
+  until Phase 3.
 
 ## Open questions / follow-ups
 
