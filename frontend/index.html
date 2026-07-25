@@ -2,12 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>frontend dev harness</title>
   </head>
   <body>
-    <div id="root"></div>
+    <h1>Vite dev harness</h1>
+    <p>The real page is Django's <code>/rsvp/</code>. This index exists only so <code>pnpm dev</code> can preview the island in isolation.</p>
+    <script type="application/json" id="rsvp-data">
+      {"csrfToken": "dev-harness-token", "submitUrl": "/rsvp/submit/"}
+    </script>
+    <div id="rsvp-root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
