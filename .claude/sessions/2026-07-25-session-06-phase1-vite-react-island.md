@@ -175,53 +175,82 @@ Per working contract, all `git add` / `git commit` is left to the user.
 
 ## Session 7 handoff
 
-**Goal:** Start Phase 2 — the first real user-facing flow. Per handoff
-`.claude/wedding-site-handoff.md`, Phase 2 covers the RSVP form
-(Guest lookup by token, form submission, RSVP DB write, error paths) and
-the Gallery browse view. Session 7 should pick one of those two and
-deliver it end-to-end (template + Django view + React island wiring +
-POST/GET plumbing + tests). RSVP is the higher-priority flow — recommend
-starting there.
+**Gate:** Session 7 does not start immediately after Session 6. Between
+sessions the user is running a **parallel design spin** — a separate
+Claude session (probably claude.ai / Artifacts) driven by
+`.claude/mid-build-design-spin.md`. That brief scopes the design output
+to a design system (palette, type, spacing tokens), a home-page mock,
+and an RSVP-landing mock — nothing more. Its Context section is filled
+in with couple names, date (2027-05-23), venue (Louland Falls, SLC),
+tone keywords, and the engagement-photos-throughout constraint.
+
+**Session 7 begins once the design outputs land in `design/` at repo
+root.** Do not start Phase 2 without them — the whole reason for the
+design spin is to avoid writing production CSS twice.
+
+**Session 7 first-half work — design integration (before any Phase 2
+feature code):**
+
+1. Read the design artifacts under `design/`. Extract the color / type /
+   spacing / radius / elevation tokens into a real
+   `backend/static/css/tokens.css` (CSS custom properties). If the
+   designer named self-hostable fonts, download them into
+   `backend/static/fonts/` and wire `@font-face` locally — no external
+   CDN links (CSP will block them).
+2. Rewrite `backend/templates/base.html` to load the token stylesheet
+   plus a base layout stylesheet built from the designer's home-page
+   mock. Wire the nav bar with links to `/rsvp/`, `/gallery/`,
+   `/hotel/`, `/registry/`, `/faq/` (placeholders 404 for now — that's
+   Phase 2's job).
+3. Update the placeholder `rsvp.html` to use the designer's RSVP-landing
+   mock layout — the `<div id="rsvp-root">` stays, but the surrounding
+   chrome (heading, container, page copy) adopts the mock.
+4. Set up a `Photo`-adjacent story for engagement imagery: either a
+   boolean flag on the existing `gallery.Photo` model
+   (`is_engagement=True`) or a new small `pages.FeaturedImage` model, per
+   the "engagement photos peppered throughout" scope note. Decide during
+   the session and log the tradeoff.
+
+**Session 7 second-half work — Phase 2 RSVP flow (per original
+handoff):**
+
+5. URL scheme: token-scoped RSVP URLs. Migrate `/rsvp/` to
+   `/rsvp/<token>/`; view does `Guest.objects.get(token=token)` and
+   passes guest data into `rsvp.html`. Add a plain `/rsvp/` landing that
+   asks for the token or shows an error.
+6. Submit endpoint: `rsvp/urls.py` — `path('<token>/submit/',
+   views.submit, name='submit')`. Accepts POST, validates CSRF,
+   creates/updates an `RSVP` row for the guest, returns JSON.
+7. `rsvp.html` `submitUrl` prop switches to `{% url 'rsvp:submit'
+   token=guest.token %}` (replacing the current hardcoded
+   `/rsvp/submit/` placeholder).
+8. Build `RsvpForm.jsx` for real: name confirm, attending Y/N, plus-one
+   Y/N, dietary notes, meal choice, submit button POSTing to
+   `props.submitUrl` with `X-CSRFToken: props.csrfToken`. Empty,
+   validation-error, and post-submit-success states — the designer mocked
+   all three.
+9. Tests: `TestCase` that GETs `/rsvp/<valid-token>/` (200, `rsvp-root`
+   in HTML) plus one that POSTs `submit` with valid + invalid payloads.
 
 **Before touching anything:**
 
 - Read this file (Session 6 log) and Sessions 4-5.
-- Re-read the handoff's Phase 2 section for the token-URL scheme, the
-  Guest → RSVP relationship, and the expected submit endpoint shape.
-- `.venv/bin/python` for all Django commands; `pnpm` (already pinned via
+- Re-read the handoff's Phase 2 section, the CloudWatch amendment
+  (relevant when Phase 2 adds the `LOGGING` dict), and
+  `.claude/mid-build-design-spin.md`.
+- `.venv/bin/python` for all Django commands; `pnpm` (pinned via
   corepack) for all frontend commands.
 - Vite 8 quirk: dev server is `http://localhost:5175/`, NOT
-  `http://127.0.0.1:5175/`. If you run automated frontend smoke tests,
-  use `localhost` or add `vite --host 127.0.0.1` to the dev script.
+  `http://127.0.0.1:5175/`. Automated frontend smoke tests must use
+  `localhost` (or pass `vite --host 127.0.0.1`).
 - Every direct dep gets exact-pinned per [[feedback-strict-version-pins]].
   Any new frontend dep added via `pnpm add <pkg>` — immediately strip the
   `^` in `package.json` and reinstall.
 
-**Work (concrete steps for Session 7 if you take the RSVP path):**
-
-1. Decide the URL scheme: the handoff mentions token-scoped RSVP URLs
-   (`/rsvp/<token>/`). Migrate the current `/rsvp/` route to
-   `/rsvp/<token>/`, update the view to `Guest.objects.get(token=token)`
-   and pass guest data into `rsvp.html`, and add a `/rsvp/` landing that
-   asks for the token or shows an error.
-2. Add the submit endpoint: `rsvp/urls.py` — `path('<token>/submit/', views.submit, name='submit')`. The view accepts POST, validates CSRF, creates/updates an `RSVP` row for the guest, returns JSON.
-3. Update the `rsvp.html` template's `submitUrl` prop to use
-   `{% url 'rsvp:submit' token=guest.token %}` instead of the hardcoded
-   `/rsvp/submit/` placeholder.
-4. Build out `RsvpForm.jsx` for real: name confirm, attending yes/no,
-   plus-one, dietary notes, meal choice, submit button that POSTs to
-   `props.submitUrl` with `X-CSRFToken: props.csrfToken`.
-5. Add `django-vite` (pinned) if you want HMR-through-Django-runserver.
-   Otherwise document the "rebuild + refresh" flow: `pnpm build` writes
-   to `backend/static/frontend/`, then reload the Django page. For
-   iteration on component internals only, `pnpm dev` against the
-   `index.html` harness still works.
-6. Tests: at minimum a `TestCase` that GETs `/rsvp/<valid-token>/` (200,
-   rsvp-root in HTML) and one that POSTs `submit` with valid + invalid
-   payloads.
-
 **Do not** touch S3, `django-storages`, `django-vite` in production, or
-the Gallery flow yet — one feature at a time.
+the Gallery flow yet — one feature at a time. Adding real Photo storage
+to S3 is a Phase 3 concern; engagement photos referenced in Session 7
+can point at local `MEDIA_ROOT` or a hardcoded S3 URL placeholder.
 
 ## Open questions / follow-ups
 
