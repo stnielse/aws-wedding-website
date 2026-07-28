@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Karla:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FDFBF7; }
+  a { color: #2A4A36; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: #B78B48; }
+</style>
+</helmet>
+
+<div style="font-family: Karla, system-ui, sans-serif; color: #1C1A16; background: #FDFBF7; padding: 64px 32px 128px; max-width: 1100px; margin: 0 auto; text-wrap: pretty;">
+
+  <div style="display: flex; flex-direction: column; gap: 12px; padding-bottom: 32px; border-bottom: 1px solid #EDE5D8;">
+    <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #6B6555;">Design artifact 01 · style guide</div>
+    <h1 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(40px, 7vw, 64px); line-height: 1.05; margin: 0; color: #14251C;">Louland Falls</h1>
+    <p style="font-size: 18px; line-height: 1.6; color: #3D392F; margin: 0; max-width: 60ch;">Visual system for Kaitlyn &amp; Steven, 23 May 2027. Deep evergreen carried over from the save-the-date, warmed with candlelight gold and cream. Built to be lifted into a Django token file — every value below is a hex plus a custom-property name.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 96px; padding-top: 64px;">
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 34px; margin: 0; color: #14251C;">Site structure</h2>
+      <p style="font-size: 16px; line-height: 1.65; color: #3D392F; margin: 0; max-width: 66ch;">Five destinations, one of them the home page. Hybrid model: the home page carries the whole story in a single scroll, and the four things a guest needs to <em>do</em> get real URLs so they can be linked from the invite, a text message, or a QR code.</p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 2px; background: #EDE5D8; border: 1px solid #EDE5D8; border-radius: 4px; overflow: hidden;">
+        <div style="background: #FDFBF7; padding: 20px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B78B48; letter-spacing: 0.08em;">/</div>
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; color: #14251C;">Home</div>
+          <div style="font-size: 13px; line-height: 1.5; color: #6B6555;">Hero, our story, the day's shape, travel &amp; stay, registry teaser, FAQ. Anchor nav within.</div>
+        </div>
+        <div style="background: #FDFBF7; padding: 20px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B78B48; letter-spacing: 0.08em;">/rsvp</div>
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; color: #14251C;">RSVP</div>
+          <div style="font-size: 13px; line-height: 1.5; color: #6B6555;">Code from the invite, then the form. The one page printed on paper.</div>
+        </div>
+        <div style="background: #FDFBF7; padding: 20px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B78B48; letter-spacing: 0.08em;">/gallery</div>
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; color: #14251C;">Photos</div>
+          <div style="font-size: 13px; line-height: 1.5; color: #6B6555;">Deferred to a later spin — nav treatment only for now.</div>
+        </div>
+        <div style="background: #FDFBF7; padding: 20px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B78B48; letter-spacing: 0.08em;">/travel</div>
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; color: #14251C;">Travel &amp; stay</div>
+          <div style="font-size: 13px; line-height: 1.5; color: #6B6555;">HotelBlock rows in full: rate, code, cutoff, notes. Home page summarizes.</div>
+        </div>
+        <div style="background: #FDFBF7; padding: 20px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B78B48; letter-spacing: 0.08em;">/registry</div>
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; color: #14251C;">Registry</div>
+          <div style="font-size: 13px; line-height: 1.5; color: #6B6555;">RegistryLink list, outbound. Thin page by design.</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; padding-top: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Navigation rules</div>
+          <ul style="margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.7; color: #3D392F;">
+            <li>No hamburger. Five items fit a phone as a wrapping row.</li>
+            <li>Nav is not sticky at the top — it re-appears as a slim sticky bar once the hero scrolls past, with RSVP as the filled button.</li>
+            <li>FAQ and Our Story live on the home page as anchors (<code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">#faq</code>, <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">#story</code>), so they're linkable without being pages.</li>
+            <li>Footer repeats every link plus the date — the second-chance nav.</li>
+          </ul>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Why not tabs</div>
+          <p style="font-size: 15px; line-height: 1.7; color: #3D392F; margin: 0;">A wedding site is read once, by people on a phone, looking for one fact. Tabs hide things behind a click and give no sense of how much there is. A scroll with a persistent RSVP button answers "when, where, what do I do" before anyone has to choose.</p>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 34px; margin: 0; color: #14251C;">Color</h2>
+      <p style="font-size: 16px; line-height: 1.65; color: #3D392F; margin: 0; max-width: 66ch;">Light mode is the product. Greens do structure and emphasis; warm neutrals do surface; gold is reserved — a rule, a small-caps label, a hover. Never gold as a large fill.</p>
+
+      <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Evergreen — from the save-the-date</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #14251C;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-forest-900</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#14251C</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #1C3427;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-forest-800</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#1C3427</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #2A4A36;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-forest-700</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#2A4A36</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #3B6349;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-forest-600</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#3B6349</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #7C9A7E;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-moss-400</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#7C9A7E</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #C4D2BF;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-sage-200</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#C4D2BF</div></div>
+      </div>
+
+      <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555; padding-top: 16px;">Warm neutrals — surface &amp; text</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #FDFBF7; border: 1px solid #EDE5D8;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-cream-50</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#FDFBF7</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #F7F2E9;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-cream-100</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#F7F2E9</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #EDE5D8;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-cream-200</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#EDE5D8</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #6B6555;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-ink-500</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#6B6555</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #3D392F;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-ink-700</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#3D392F</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #1C1A16;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-ink-900</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#1C1A16</div></div>
+      </div>
+
+      <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555; padding-top: 16px;">Accents &amp; state</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #B78B48;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-gold-500</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#B78B48 · accent, links on dark</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #DCC28C;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-gold-300</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#DCC28C · rules, focus ring</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #E4C4B4;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-dusk-300</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#E4C4B4 · optional blush wash</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #8C3A2E;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-error-600</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#8C3A2E · form errors</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div style="height: 88px; border-radius: 4px; background: #F6E7E3;"></div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #1C1A16;">--color-error-50</div><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">#F6E7E3 · error field fill</div></div>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: flex-start; padding: 16px 20px; background: #F7F2E9; border-left: 2px solid #B78B48; border-radius: 0 4px 4px 0;">
+        <p style="margin: 0; font-size: 14px; line-height: 1.65; color: #3D392F;"><strong style="font-weight: 600;">Contrast checked.</strong> ink-700 on cream-50 = 9.6:1. forest-700 on cream-50 = 8.7:1. cream-50 on forest-800 = 13.2:1. gold-500 on cream-50 = 3.4:1 — <em>large text and non-text only</em>, never body copy. Dark mode is deferred; the palette already has the ramp for it if you want it later.</p>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 34px; margin: 0; color: #14251C;">Typography</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+        <div style="padding: 24px; background: #F7F2E9; border-radius: 4px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">--font-display</div>
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: 52px; line-height: 1; color: #14251C;">Cormorant Garamond</div>
+          <div style="font-size: 14px; line-height: 1.6; color: #3D392F;">Light 300 for display sizes, 400 for section heads, 500i for pull quotes. Never below 20px — it goes fragile. Fallback stack: <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">Georgia, 'Times New Roman', serif</code>.</div>
+        </div>
+        <div style="padding: 24px; background: #F7F2E9; border-radius: 4px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">--font-body</div>
+          <div style="font-family: Karla, sans-serif; font-weight: 400; font-size: 44px; line-height: 1.05; color: #14251C;">Karla</div>
+          <div style="font-size: 14px; line-height: 1.6; color: #3D392F;">400 body, 500 labels, 600 buttons. Slightly quirky humanist sans — keeps the serif from tipping formal. Fallback: <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">system-ui, -apple-system, sans-serif</code>.</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 20px; padding-top: 8px;">
+        <div style="display: flex; gap: 24px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid #EDE5D8; padding-bottom: 16px;"><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555; min-width: 220px;">--text-display · clamp(44px,9vw,88px)</div><div style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: 72px; line-height: 1; color: #14251C;">Kaitlyn &amp; Steven</div></div>
+        <div style="display: flex; gap: 24px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid #EDE5D8; padding-bottom: 16px;"><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555; min-width: 220px;">--text-3xl · clamp(30px,4vw,44px)</div><div style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 40px; line-height: 1.15; color: #14251C;">A day in the canyon</div></div>
+        <div style="display: flex; gap: 24px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid #EDE5D8; padding-bottom: 16px;"><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555; min-width: 220px;">--text-2xl · 28px</div><div style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 28px; line-height: 1.25; color: #14251C;">Travel &amp; where to stay</div></div>
+        <div style="display: flex; gap: 24px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid #EDE5D8; padding-bottom: 16px;"><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555; min-width: 220px;">--text-lg · 19px · body</div><div style="font-family: Karla, sans-serif; font-size: 19px; line-height: 1.65; color: #3D392F; max-width: 46ch;">Late May in the Wasatch: sun at four in the afternoon, cold enough after dark that you'll want a jacket.</div></div>
+        <div style="display: flex; gap: 24px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid #EDE5D8; padding-bottom: 16px;"><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555; min-width: 220px;">--text-base · 16px</div><div style="font-family: Karla, sans-serif; font-size: 16px; line-height: 1.6; color: #3D392F; max-width: 52ch;">Default UI text and form field values. Never smaller than 16px inside an input — iOS zooms on focus otherwise.</div></div>
+        <div style="display: flex; gap: 24px; align-items: baseline; flex-wrap: wrap;"><div style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555; min-width: 220px;">--text-eyebrow · 12px/0.14em</div><div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #B78B48;">Saturday, the twenty-third of May</div></div>
+      </div>
+
+      <div style="display: flex; gap: 12px; padding: 16px 20px; background: #F7F2E9; border-left: 2px solid #B78B48; border-radius: 0 4px 4px 0;">
+        <p style="margin: 0; font-size: 14px; line-height: 1.65; color: #3D392F;"><strong style="font-weight: 600;">Self-host these.</strong> The CSP blocks font CDNs — these mocks link Google Fonts for preview only. Download <em>Cormorant Garamond</em> (300, 400, 500, 400-italic) and <em>Karla</em> (400, 500, 600) as woff2 subsets (latin), serve from <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">static/fonts/</code> behind CloudFront, and declare them with <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">@font-face</code> + <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">font-display: swap</code>. Both are OFL. Seven files total, ~120KB.</p>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 34px; margin: 0; color: #14251C;">Space, radius, elevation</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">--space-* · 4px base</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 4px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">1 · 4px</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 8px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">2 · 8px</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 12px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">3 · 12px</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 16px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">4 · 16px</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 24px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">5 · 24px</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 32px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">6 · 32px</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 48px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">7 · 48px · block gap</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 64px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">8 · 64px</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 96px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">9 · 96px · section</span></div>
+            <div style="display: flex; align-items: center; gap: 12px;"><div style="width: 128px; height: 14px; background: #3B6349;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6B6555;">10 · 128px · desktop section</span></div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">--radius-*</div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 76px; height: 60px; background: #C4D2BF; border-radius: 2px;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">sm · 2px</span></div>
+              <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 76px; height: 60px; background: #C4D2BF; border-radius: 4px;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">md · 4px</span></div>
+              <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 76px; height: 60px; background: #C4D2BF; border-radius: 8px;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">lg · 8px</span></div>
+              <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 76px; height: 60px; background: #C4D2BF; border-radius: 999px;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">pill</span></div>
+              <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 76px; height: 60px; background: #C4D2BF; border-radius: 38px 38px 4px 4px;"></div><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">arch · images</span></div>
+            </div>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #3D392F;">Restrained radii — 4px is the default. The arch is the one flourish, reserved for portrait engagement photos.</p>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">--shadow-*</div>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+              <div style="width: 110px; height: 64px; background: #FDFBF7; border-radius: 4px; box-shadow: 0 1px 2px rgba(20,37,28,0.07); display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">sm</div>
+              <div style="width: 110px; height: 64px; background: #FDFBF7; border-radius: 4px; box-shadow: 0 4px 16px rgba(20,37,28,0.09); display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">md</div>
+              <div style="width: 110px; height: 64px; background: #FDFBF7; border-radius: 4px; box-shadow: 0 16px 48px rgba(20,37,28,0.14); display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #6B6555;">lg</div>
+            </div>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #3D392F;">Shadows are green-tinted, not grey. Used sparingly — cards prefer a cream-200 border.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 34px; margin: 0; color: #14251C;">Components</h2>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Buttons — 48px min height, 16px text</div>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+          <a href="#components" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.02em; color: #FDFBF7; background: #1C3427; padding: 15px 34px; border-radius: 4px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; transition: background 160ms ease;" style-hover="background: #2A4A36; color: #FDFBF7;">RSVP</a>
+          <a href="#components" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.02em; color: #1C3427; background: transparent; padding: 14px 33px; border: 1px solid #2A4A36; border-radius: 4px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; transition: background 160ms ease;" style-hover="background: #F7F2E9; color: #1C3427;">Travel &amp; stay</a>
+          <a href="#components" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 500; color: #2A4A36; text-decoration: none; border-bottom: 1px solid #DCC28C; padding-bottom: 2px;" style-hover="color: #B78B48; border-bottom: 1px solid #B78B48;">See the registry →</a>
+          <span style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 600; color: #6B6555; background: #EDE5D8; padding: 15px 34px; border-radius: 4px; min-height: 48px; display: inline-flex; align-items: center;">Disabled</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; padding-top: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Field · rest</div>
+          <label style="font-family: Karla, sans-serif; font-size: 14px; font-weight: 500; color: #3D392F; display: block;">Dietary notes</label>
+          <div style="font-family: Karla, sans-serif; font-size: 16px; color: #6B6555; background: #FDFBF7; border: 1px solid #C4D2BF; border-radius: 4px; padding: 14px 16px; min-height: 48px; box-sizing: border-box;">Anything we should know?</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Field · focus</div>
+          <label style="font-family: Karla, sans-serif; font-size: 14px; font-weight: 500; color: #3D392F; display: block;">Dietary notes</label>
+          <div style="font-family: Karla, sans-serif; font-size: 16px; color: #1C1A16; background: #FDFBF7; border: 1px solid #2A4A36; border-radius: 4px; padding: 14px 16px; min-height: 48px; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(220,194,140,0.55);">No shellfish, please</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Field · error</div>
+          <label style="font-family: Karla, sans-serif; font-size: 14px; font-weight: 500; color: #3D392F; display: block;">Invitation code</label>
+          <div style="font-family: Karla, sans-serif; font-size: 16px; color: #1C1A16; background: #F6E7E3; border: 1px solid #8C3A2E; border-radius: 4px; padding: 14px 16px; min-height: 48px; box-sizing: border-box;">FALLS-99Z</div>
+          <div style="font-family: Karla, sans-serif; font-size: 14px; color: #8C3A2E; line-height: 1.5;">We can't find that code — check the back of your invitation.</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; padding-top: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Choice cards — the yes/no pattern</div>
+          <div style="display: flex; gap: 12px;">
+            <div style="flex: 1; background: #1C3427; color: #FDFBF7; border: 1px solid #1C3427; border-radius: 4px; padding: 18px; text-align: center; font-family: Karla, sans-serif; font-size: 16px; font-weight: 600;">Joyfully accepts</div>
+            <div style="flex: 1; background: #FDFBF7; color: #3D392F; border: 1px solid #C4D2BF; border-radius: 4px; padding: 18px; text-align: center; font-family: Karla, sans-serif; font-size: 16px; font-weight: 500;">Regretfully declines</div>
+          </div>
+          <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #6B6555;">Big tap targets instead of radio dots. Whole card is the label.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Info card — hotels, FAQ, schedule</div>
+          <div style="background: #FDFBF7; border: 1px solid #EDE5D8; border-radius: 4px; padding: 24px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #B78B48;">Room block</div>
+            <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 26px; color: #14251C;">Kimpton Monaco</div>
+            <div style="font-family: Karla, sans-serif; font-size: 16px; line-height: 1.6; color: #3D392F;">$189/night · code <strong style="font-weight: 600;">MASONNIELSEN</strong> · book by 22 April</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 8px;">
+        <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Sticky nav — appears after hero</div>
+        <div style="background: rgba(253,251,247,0.94); border: 1px solid #EDE5D8; border-radius: 4px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; box-shadow: 0 4px 16px rgba(20,37,28,0.06);">
+          <span style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; color: #14251C;">K &amp; S</span>
+          <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+            <a href="#components" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">Our story</a>
+            <a href="#components" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">The day</a>
+            <a href="#components" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">Travel</a>
+            <a href="#components" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">Registry</a>
+            <a href="#components" style="font-family: Karla, sans-serif; font-size: 15px; font-weight: 600; color: #FDFBF7; background: #1C3427; padding: 10px 22px; border-radius: 4px; text-decoration: none;" style-hover="background: #2A4A36; color: #FDFBF7;">RSVP</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 34px; margin: 0; color: #14251C;">Imagery</h2>
+      <p style="font-size: 16px; line-height: 1.65; color: #3D392F; margin: 0; max-width: 66ch;">Engagement photos are the whole aesthetic — they run through every section, not just a gallery. Three treatments only, so a page never feels like a collage.</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="aspect-ratio: 16/9; border-radius: 4px; background: repeating-linear-gradient(135deg, #EDE5D8 0 10px, #F7F2E9 10px 20px); display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px;"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; color: #6B6555;">full-bleed<br>16:9 · hero, section breaks</span></div>
+          <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #6B6555;">Edge to edge, forest-900 scrim at 35% for text over it.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="aspect-ratio: 3/4; border-radius: 110px 110px 4px 4px; background: repeating-linear-gradient(135deg, #EDE5D8 0 10px, #F7F2E9 10px 20px); display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px;"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; color: #6B6555;">arch portrait<br>3:4 · story, single moments</span></div>
+          <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #6B6555;">One per section, max. The flourish.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="aspect-ratio: 1; border-radius: 4px; background: repeating-linear-gradient(135deg, #EDE5D8 0 10px, #F7F2E9 10px 20px); display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px;"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; color: #6B6555;">square tile<br>1:1 · grids, gallery teaser</span></div>
+          <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #6B6555;">Used in rows of 2 (phone) / 4 (desktop).</p>
+        </div>
+      </div>
+      <p style="margin: 0; font-size: 14px; line-height: 1.65; color: #3D392F; max-width: 66ch;">Serve from CloudFront as AVIF with WebP fallback, <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">srcset</code> at 640/1024/1600/2400, <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">loading="lazy"</code> below the fold, explicit width/height to stop layout shift. Every photo needs real alt text — the Photo model has <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">caption</code> but no <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">alt</code> field; see the questions below.</p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 20px; padding: 32px; background: #1C3427; border-radius: 4px;">
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 34px; margin: 0; color: #FDFBF7;">Questions for you — not invented, just flagged</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #DCC28C;">Model gap</div>
+          <p style="margin: 0; font-family: Karla, sans-serif; font-size: 15px; line-height: 1.6; color: #F7F2E9;">The RSVP form needs dietary notes, but <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">RSVP</code> only has <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">meal_choice</code> and a general <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">notes</code>. Is <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">notes</code> doing double duty, or does dietary want its own field?</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #DCC28C;">Meal choices</div>
+          <p style="margin: 0; font-family: Karla, sans-serif; font-size: 15px; line-height: 1.6; color: #F7F2E9;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">meal_choice</code> is a free CharField. I've mocked three options — what are the real ones, and are they per-person (plus-one has its own)? The model says yes.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #DCC28C;">Party vs. guest</div>
+          <p style="margin: 0; font-family: Karla, sans-serif; font-size: 15px; line-height: 1.6; color: #F7F2E9;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">Guest</code> is one person + optional plus-one. A family of four means four codes and four visits. Is a household/party grouping worth adding before Phase 2 hardens?</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #DCC28C;">Editing an RSVP</div>
+          <p style="margin: 0; font-family: Karla, sans-serif; font-size: 15px; line-height: 1.6; color: #F7F2E9;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">OneToOneField</code> means one submission per guest. What happens when someone re-enters their code — read-only receipt, or editable until a cutoff? I designed the receipt with an "amend" affordance; say the word and I'll drop it.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #DCC28C;">Alt text</div>
+          <p style="margin: 0; font-family: Karla, sans-serif; font-size: 15px; line-height: 1.6; color: #F7F2E9;"><code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">Photo</code> has <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">caption</code> but no <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #DCC28C;">alt_text</code>. Captions are decorative and often empty; alt is not. Cheap to add now.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #DCC28C;">Schedule content</div>
+          <p style="margin: 0; font-family: Karla, sans-serif; font-size: 15px; line-height: 1.6; color: #F7F2E9;">The home page has a "shape of the day" section but no model backs it — no Event model exists. Hardcode in the template, or add one? Mocked as static copy for now.</p>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #EDE5D8; padding-top: 32px;">
+      <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6555;">Notes for the port</div>
+      <ul style="margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.8; color: #3D392F; max-width: 72ch;">
+        <li>Responsiveness here is fluid, not breakpoint-based: <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">clamp()</code> type, <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">grid-template-columns: repeat(auto-fit, minmax(...))</code>, wrapping flex rows. It survives 320px→2560px with no media queries. Add them only where a layout genuinely needs to reorder.</li>
+        <li>Every value above wants to become a custom property on <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">:root</code> in one token partial; the mocks inline them so you can see the actual hex in place.</li>
+        <li>No JS in any artifact. The sticky nav, lightbox, and countdown are yours.</li>
+        <li>Image placeholders are striped divs with monospace labels — swap for real <code style="font-family: ui-monospace, Menlo, monospace; font-size: 13px;">&lt;img&gt;</code> against the S3/CloudFront URLs.</li>
+      </ul>
+    </section>
+
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

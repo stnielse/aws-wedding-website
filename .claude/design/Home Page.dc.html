@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Karla:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FDFBF7; }
+  a { color: #2A4A36; }
+  a:hover { color: #B78B48; }
+</style>
+</helmet>
+
+<div style="font-family: Karla, system-ui, sans-serif; background: #FDFBF7; color: #1C1A16; text-wrap: pretty; overflow-x: hidden;">
+
+  <section data-screen-label="Hero" style="position: relative; min-height: min(92vh, 860px); display: flex; flex-direction: column; justify-content: flex-end; background: repeating-linear-gradient(135deg, #24382C 0 14px, #1C3427 14px 28px); padding: 0;">
+    <div style="position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: flex-end; padding: clamp(20px, 4vw, 48px); pointer-events: none; z-index: 2;">
+      <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.1em; color: rgba(253,251,247,0.8); text-align: right; line-height: 1.7;">FULL-BLEED HERO · 16:9 → 3:4 on phone<br>engagement photo — the two of you, canyon light, wide</span>
+    </div>
+    <div style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(20,37,28,0.82) 0%, rgba(20,37,28,0.28) 45%, rgba(20,37,28,0.35) 100%);"></div>
+    <div style="position: relative; padding: 0 clamp(24px, 6vw, 96px) clamp(48px, 7vw, 88px); display: flex; flex-direction: column; gap: 24px; max-width: 1400px; width: 100%; margin: 0 auto; box-sizing: border-box;">
+      <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: #DCC28C;">Louland Falls · Salt Lake City, Utah</div>
+      <h1 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(52px, 11vw, 128px); line-height: 0.92; margin: 0; color: #FDFBF7; letter-spacing: -0.01em;">Kaitlyn<span style="font-style: italic; font-weight: 400; padding: 0 0.18em; color: #DCC28C;">&amp;</span>Steven</h1>
+      <div style="display: flex; align-items: center; gap: clamp(16px, 3vw, 32px); flex-wrap: wrap;">
+        <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(22px, 3vw, 32px); font-weight: 400; color: #F7F2E9;">Saturday, the twenty-third of May</div>
+        <div style="width: 1px; height: 28px; background: rgba(220,194,140,0.6);"></div>
+        <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(22px, 3vw, 32px); font-weight: 400; color: #F7F2E9;">Two thousand twenty-seven</div>
+      </div>
+      <div style="display: flex; gap: 16px; flex-wrap: wrap; padding-top: 8px;">
+        <a href="#rsvp" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.02em; color: #14251C; background: #FDFBF7; padding: 16px 40px; border-radius: 4px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center;" style-hover="background: #DCC28C; color: #14251C;">RSVP</a>
+        <a href="#day" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.02em; color: #FDFBF7; background: transparent; border: 1px solid rgba(253,251,247,0.55); padding: 15px 39px; border-radius: 4px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center;" style-hover="background: rgba(253,251,247,0.12); color: #FDFBF7;">The details</a>
+      </div>
+    </div>
+  </section>
+
+  <div style="position: sticky; top: 0; z-index: 20; background: rgba(253,251,247,0.94); backdrop-filter: blur(8px); border-bottom: 1px solid #EDE5D8;">
+    <div style="max-width: 1400px; margin: 0 auto; padding: 12px clamp(20px, 6vw, 96px); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+      <a href="#top" style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 24px; color: #14251C; text-decoration: none; letter-spacing: 0.04em;">K &amp; S</a>
+      <nav style="display: flex; gap: clamp(14px, 2vw, 28px); align-items: center; flex-wrap: wrap;">
+        <a href="#story" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">Our story</a>
+        <a href="#day" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">The day</a>
+        <a href="#travel" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">Travel</a>
+        <a href="#photos" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">Photos</a>
+        <a href="#registry" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">Registry</a>
+        <a href="#faq" style="font-family: Karla, sans-serif; font-size: 15px; color: #3D392F; text-decoration: none;" style-hover="color: #B78B48;">FAQ</a>
+        <a href="#rsvp" style="font-family: Karla, sans-serif; font-size: 15px; font-weight: 600; color: #FDFBF7; background: #1C3427; padding: 11px 24px; border-radius: 4px; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center;" style-hover="background: #2A4A36; color: #FDFBF7;">RSVP</a>
+      </nav>
+    </div>
+  </div>
+
+  <section data-screen-label="Intro / story" id="story" style="max-width: 1400px; margin: 0 auto; padding: clamp(64px, 10vw, 128px) clamp(24px, 6vw, 96px); display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: clamp(40px, 6vw, 88px); align-items: center;">
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #B78B48;">We're getting married</div>
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(32px, 4.5vw, 52px); line-height: 1.12; margin: 0; color: #14251C;">Nine years after a very bad first date, we're doing this properly.</h2>
+      <p style="font-size: 19px; line-height: 1.7; color: #3D392F; margin: 0; max-width: 46ch;">We met in a parking lot in Sugar House, argued about a movie neither of us had seen, and somehow kept going. Now we'd like to stand under the pines at Louland Falls with the people who got us here.</p>
+      <p style="font-size: 19px; line-height: 1.7; color: #3D392F; margin: 0; max-width: 46ch;">Come early, stay late, wear shoes you can walk in. There's a creek.</p>
+      <div style="display: flex; align-items: center; gap: 16px; padding-top: 8px;">
+        <div style="width: 40px; height: 1px; background: #DCC28C;"></div>
+        <span style="font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 24px; color: #2A4A36;">Kaitlyn &amp; Steven</span>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: center;">
+      <div style="width: 100%; max-width: 460px; aspect-ratio: 3/4; border-radius: 230px 230px 4px 4px; background: repeating-linear-gradient(135deg, #EDE5D8 0 12px, #F7F2E9 12px 24px); display: flex; align-items: center; justify-content: center; text-align: center; padding: 32px;">
+        <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.7; color: #6B6555;">ARCH PORTRAIT · 3:4<br>engagement — vertical, the two of you close</span>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="The day" id="day" style="background: #1C3427; color: #F7F2E9;">
+    <div style="max-width: 1400px; margin: 0 auto; padding: clamp(64px, 10vw, 128px) clamp(24px, 6vw, 96px); display: flex; flex-direction: column; gap: clamp(40px, 6vw, 72px);">
+      <div style="display: flex; flex-direction: column; gap: 16px; max-width: 60ch;">
+        <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #DCC28C;">The shape of the day</div>
+        <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(32px, 4.5vw, 52px); line-height: 1.12; margin: 0; color: #FDFBF7;">Late spring in the canyon</h2>
+        <p style="font-size: 19px; line-height: 1.7; color: rgba(247,242,233,0.86); margin: 0;">Everything happens at Louland Falls — ceremony under the trees, dinner and dancing in the pavilion twenty steps away. Outdoors throughout. It's roughly 60°F at sundown; bring a layer.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: rgba(220,194,140,0.28);">
+        <div style="background: #1C3427; padding: 28px 24px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 40px; font-weight: 300; color: #DCC28C; line-height: 1;">4:30</div>
+          <div style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; color: #FDFBF7;">Guests arrive</div>
+          <div style="font-size: 15px; line-height: 1.6; color: rgba(247,242,233,0.75);">Drinks on the lawn. Parking is on site, no shuttle needed.</div>
+        </div>
+        <div style="background: #1C3427; padding: 28px 24px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 40px; font-weight: 300; color: #DCC28C; line-height: 1;">5:00</div>
+          <div style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; color: #FDFBF7;">Ceremony</div>
+          <div style="font-size: 15px; line-height: 1.6; color: rgba(247,242,233,0.75);">Under the pines by the falls. Twenty-five minutes, we promise.</div>
+        </div>
+        <div style="background: #1C3427; padding: 28px 24px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 40px; font-weight: 300; color: #DCC28C; line-height: 1;">6:00</div>
+          <div style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; color: #FDFBF7;">Dinner</div>
+          <div style="font-size: 15px; line-height: 1.6; color: rgba(247,242,233,0.75);">Seated, in the pavilion. You'll pick a main when you RSVP.</div>
+        </div>
+        <div style="background: #1C3427; padding: 28px 24px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 40px; font-weight: 300; color: #DCC28C; line-height: 1;">8:00</div>
+          <div style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; color: #FDFBF7;">Dancing</div>
+          <div style="font-size: 15px; line-height: 1.6; color: rgba(247,242,233,0.75);">Until eleven. Cake somewhere in the middle.</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; padding-top: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <span style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(247,242,233,0.6);">Dress</span>
+          <span style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 26px; color: #FDFBF7;">Garden formal — flat shoes welcome</span>
+        </div>
+        <a href="#faq" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 500; color: #DCC28C; text-decoration: none; border-bottom: 1px solid rgba(220,194,140,0.5); padding-bottom: 3px;" style-hover="color: #FDFBF7; border-bottom: 1px solid #FDFBF7;">More questions answered →</a>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Photo break" style="height: clamp(280px, 38vw, 520px); background: repeating-linear-gradient(135deg, #EDE5D8 0 14px, #F7F2E9 14px 28px); display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px;">
+    <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.1em; line-height: 1.7; color: #6B6555;">FULL-BLEED BREAK · 16:9<br>engagement — landscape, mountains behind you</span>
+  </section>
+
+  <section data-screen-label="Travel" id="travel" style="max-width: 1400px; margin: 0 auto; padding: clamp(64px, 10vw, 128px) clamp(24px, 6vw, 96px); display: flex; flex-direction: column; gap: 40px;">
+    <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; justify-content: space-between;">
+      <div style="display: flex; flex-direction: column; gap: 16px; max-width: 52ch;">
+        <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #B78B48;">Travel &amp; where to stay</div>
+        <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(32px, 4.5vw, 52px); line-height: 1.12; margin: 0; color: #14251C;">Fly into SLC — it's twenty minutes from downtown.</h2>
+        <p style="font-size: 18px; line-height: 1.7; color: #3D392F; margin: 0;">We're holding rooms at two hotels downtown. The venue is a thirty-five minute drive up the canyon from either; rent a car or plan to carpool.</p>
+      </div>
+      <a href="#travel" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 600; color: #1C3427; border: 1px solid #2A4A36; padding: 15px 32px; border-radius: 4px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; white-space: nowrap;" style-hover="background: #F7F2E9; color: #1C3427;">All travel details</a>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+      <div style="background: #FDFBF7; border: 1px solid #EDE5D8; border-radius: 4px; padding: 28px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #B78B48;">Room block · closer</div>
+        <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 28px; color: #14251C; line-height: 1.15;">Kimpton Hotel Monaco</div>
+        <div style="font-size: 16px; line-height: 1.7; color: #3D392F;">$189/night · code <strong style="font-weight: 600;">MASONNIELSEN</strong><br>Book by 22 April 2027</div>
+        <a href="#travel" style="font-family: Karla, sans-serif; font-size: 15px; font-weight: 500; color: #2A4A36; text-decoration: none; border-bottom: 1px solid #DCC28C; padding-bottom: 2px; align-self: flex-start; margin-top: 4px;" style-hover="color: #B78B48; border-bottom: 1px solid #B78B48;">Reserve a room →</a>
+      </div>
+      <div style="background: #FDFBF7; border: 1px solid #EDE5D8; border-radius: 4px; padding: 28px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #B78B48;">Room block · cheaper</div>
+        <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 28px; color: #14251C; line-height: 1.15;">Hyatt Place Downtown</div>
+        <div style="font-size: 16px; line-height: 1.7; color: #3D392F;">$142/night · code <strong style="font-weight: 600;">KSMAY27</strong><br>Book by 22 April 2027</div>
+        <a href="#travel" style="font-family: Karla, sans-serif; font-size: 15px; font-weight: 500; color: #2A4A36; text-decoration: none; border-bottom: 1px solid #DCC28C; padding-bottom: 2px; align-self: flex-start; margin-top: 4px;" style-hover="color: #B78B48; border-bottom: 1px solid #B78B48;">Reserve a room →</a>
+      </div>
+      <div style="background: #F7F2E9; border: 1px solid #EDE5D8; border-radius: 4px; padding: 28px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #B78B48;">Getting up the canyon</div>
+        <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 28px; color: #14251C; line-height: 1.15;">Louland Falls</div>
+        <div style="font-size: 16px; line-height: 1.7; color: #3D392F;">3600 S Big Cottonwood Canyon Rd<br>35 min from downtown · free parking on site</div>
+        <a href="#travel" style="font-family: Karla, sans-serif; font-size: 15px; font-weight: 500; color: #2A4A36; text-decoration: none; border-bottom: 1px solid #DCC28C; padding-bottom: 2px; align-self: flex-start; margin-top: 4px;" style-hover="color: #B78B48; border-bottom: 1px solid #B78B48;">Open in Maps →</a>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Photos teaser" id="photos" style="background: #F7F2E9;">
+    <div style="max-width: 1400px; margin: 0 auto; padding: clamp(64px, 10vw, 112px) clamp(24px, 6vw, 96px); display: flex; flex-direction: column; gap: 32px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; justify-content: space-between;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #B78B48;">Photographs</div>
+          <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(32px, 4.5vw, 52px); line-height: 1.12; margin: 0; color: #14251C;">From the engagement shoot</h2>
+        </div>
+        <a href="#photos" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 600; color: #1C3427; border: 1px solid #2A4A36; padding: 15px 32px; border-radius: 4px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; white-space: nowrap;" style-hover="background: #EDE5D8; color: #1C3427;">See all photos</a>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+        <div style="aspect-ratio: 1; border-radius: 4px; background: repeating-linear-gradient(135deg, #E4DCCD 0 10px, #EDE5D8 10px 20px); display: flex; align-items: center; justify-content: center;"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: #6B6555;">1:1</span></div>
+        <div style="aspect-ratio: 1; border-radius: 4px; background: repeating-linear-gradient(135deg, #E4DCCD 0 10px, #EDE5D8 10px 20px); display: flex; align-items: center; justify-content: center;"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: #6B6555;">1:1</span></div>
+        <div style="aspect-ratio: 1; border-radius: 4px; background: repeating-linear-gradient(135deg, #E4DCCD 0 10px, #EDE5D8 10px 20px); display: flex; align-items: center; justify-content: center;"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: #6B6555;">1:1</span></div>
+        <div style="aspect-ratio: 1; border-radius: 4px; background: repeating-linear-gradient(135deg, #E4DCCD 0 10px, #EDE5D8 10px 20px); display: flex; align-items: center; justify-content: center;"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: #6B6555;">1:1</span></div>
+      </div>
+      <p style="margin: 0; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.7; color: #6B6555;">Four square tiles · full gallery page deferred to a later design spin</p>
+    </div>
+  </section>
+
+  <section data-screen-label="RSVP band" id="rsvp" style="background: #14251C; position: relative;">
+    <div style="max-width: 1400px; margin: 0 auto; padding: clamp(72px, 11vw, 136px) clamp(24px, 6vw, 96px); display: flex; flex-direction: column; align-items: center; gap: 24px; text-align: center;">
+      <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #DCC28C;">Kindly reply by 1 April 2027</div>
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(36px, 6vw, 72px); line-height: 1.05; margin: 0; color: #FDFBF7; max-width: 24ch;">Will you be there?</h2>
+      <p style="font-size: 18px; line-height: 1.7; color: rgba(247,242,233,0.82); margin: 0; max-width: 46ch;">You'll need the code on the back of your invitation — it takes about a minute.</p>
+      <a href="#rsvp" style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; letter-spacing: 0.02em; color: #14251C; background: #DCC28C; padding: 18px 48px; border-radius: 4px; text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; margin-top: 8px;" style-hover="background: #FDFBF7; color: #14251C;">RSVP now</a>
+    </div>
+  </section>
+
+  <section data-screen-label="Registry + FAQ" style="max-width: 1400px; margin: 0 auto; padding: clamp(64px, 10vw, 128px) clamp(24px, 6vw, 96px); display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: clamp(40px, 6vw, 80px);">
+    <div id="registry" style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #B78B48;">Registry</div>
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(28px, 3.5vw, 40px); line-height: 1.15; margin: 0; color: #14251C;">Your presence is the thing. But if you insist —</h2>
+      <div style="display: flex; flex-direction: column; gap: 0; border-top: 1px solid #EDE5D8;">
+        <a href="#registry" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 4px; border-bottom: 1px solid #EDE5D8; text-decoration: none; font-family: Karla, sans-serif; font-size: 18px; color: #1C1A16;" style-hover="color: #B78B48;"><span>Crate &amp; Barrel</span><span style="color: #B78B48;">→</span></a>
+        <a href="#registry" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 4px; border-bottom: 1px solid #EDE5D8; text-decoration: none; font-family: Karla, sans-serif; font-size: 18px; color: #1C1A16;" style-hover="color: #B78B48;"><span>REI</span><span style="color: #B78B48;">→</span></a>
+        <a href="#registry" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 4px; border-bottom: 1px solid #EDE5D8; text-decoration: none; font-family: Karla, sans-serif; font-size: 18px; color: #1C1A16;" style-hover="color: #B78B48;"><span>Honeymoon fund</span><span style="color: #B78B48;">→</span></a>
+      </div>
+    </div>
+    <div id="faq" style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="font-family: Karla, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #B78B48;">Questions</div>
+      <h2 style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(28px, 3.5vw, 40px); line-height: 1.15; margin: 0; color: #14251C;">The things everyone asks</h2>
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; color: #14251C;">Can I bring my kids?</div>
+          <div style="font-size: 16px; line-height: 1.7; color: #3D392F;">We'd love to see them at the ceremony. Dinner is adults-only — we can recommend a sitter downtown.</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; color: #14251C;">Is it all outside?</div>
+          <div style="font-size: 16px; line-height: 1.7; color: #3D392F;">Yes. The pavilion is covered and heated, but the ground is grass and gravel. Rain plan is the same pavilion.</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: Karla, sans-serif; font-size: 17px; font-weight: 600; color: #14251C;">Can I bring a date?</div>
+          <div style="font-size: 16px; line-height: 1.7; color: #3D392F;">If your invitation includes a plus-one, the RSVP form will say so when you enter your code.</div>
+        </div>
+      </div>
+      <a href="#faq" style="font-family: Karla, sans-serif; font-size: 16px; font-weight: 500; color: #2A4A36; text-decoration: none; border-bottom: 1px solid #DCC28C; padding-bottom: 2px; align-self: flex-start;" style-hover="color: #B78B48; border-bottom: 1px solid #B78B48;">All questions →</a>
+    </div>
+  </section>
+
+  <footer style="background: #1C3427; color: rgba(247,242,233,0.8);">
+    <div style="max-width: 1400px; margin: 0 auto; padding: clamp(48px, 7vw, 80px) clamp(24px, 6vw, 96px); display: flex; flex-direction: column; gap: 40px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 32px; justify-content: space-between; align-items: flex-start;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 40px; font-weight: 300; color: #FDFBF7; line-height: 1;">Kaitlyn <span style="font-style: italic; color: #DCC28C;">&amp;</span> Steven</div>
+          <div style="font-family: Karla, sans-serif; font-size: 15px; letter-spacing: 0.04em;">23 May 2027 · Louland Falls · Salt Lake City, Utah</div>
+        </div>
+        <nav style="display: flex; flex-wrap: wrap; gap: 20px 28px;">
+          <a href="#story" style="font-family: Karla, sans-serif; font-size: 15px; color: rgba(247,242,233,0.8); text-decoration: none;" style-hover="color: #DCC28C;">Our story</a>
+          <a href="#day" style="font-family: Karla, sans-serif; font-size: 15px; color: rgba(247,242,233,0.8); text-decoration: none;" style-hover="color: #DCC28C;">The day</a>
+          <a href="#travel" style="font-family: Karla, sans-serif; font-size: 15px; color: rgba(247,242,233,0.8); text-decoration: none;" style-hover="color: #DCC28C;">Travel</a>
+          <a href="#photos" style="font-family: Karla, sans-serif; font-size: 15px; color: rgba(247,242,233,0.8); text-decoration: none;" style-hover="color: #DCC28C;">Photos</a>
+          <a href="#registry" style="font-family: Karla, sans-serif; font-size: 15px; color: rgba(247,242,233,0.8); text-decoration: none;" style-hover="color: #DCC28C;">Registry</a>
+          <a href="#faq" style="font-family: Karla, sans-serif; font-size: 15px; color: rgba(247,242,233,0.8); text-decoration: none;" style-hover="color: #DCC28C;">FAQ</a>
+          <a href="#rsvp" style="font-family: Karla, sans-serif; font-size: 15px; color: #DCC28C; text-decoration: none; font-weight: 600;" style-hover="color: #FDFBF7;">RSVP</a>
+        </nav>
+      </div>
+      <div style="border-top: 1px solid rgba(220,194,140,0.22); padding-top: 20px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.06em; color: rgba(247,242,233,0.5);">DESIGN ARTIFACT 02 · HOME PAGE MOCK · NO JS · STICKY NAV BEHAVIOUR IS THE BUILD'S JOB</div>
+    </div>
+  </footer>
+</div>
+
+</x-dc>
+</body>
+</html>
