@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Kaitlyn &amp; Steven · 23 May 2027 · Louland Falls{% endblock %}
+
+{# Home has its own in-content sticky nav with anchor links; suppress the default site nav above the hero. #}
+{% block nav %}{% endblock %}
+
+{% block content %}
+  <section class="hero" id="top" aria-label="Hero">
+    <div class="hero__label">FULL-BLEED HERO · 16:9 → 3:4 on phone<br>engagement photo — the two of you, canyon light, wide</div>
+    <div class="hero__scrim"></div>
+    <div class="hero__content">
+      <div class="hero__eyebrow">Louland Falls · Salt Lake City, Utah</div>
+      <h1 class="hero__title">Kaitlyn<em>&amp;</em>Steven</h1>
+      <div class="hero__date-row">
+        <span class="hero__date">Saturday, the twenty-third of May</span>
+        <span class="hero__date-sep" aria-hidden="true"></span>
+        <span class="hero__date">Two thousand twenty-seven</span>
+      </div>
+      <div class="hero__ctas">
+        <a class="btn btn--on-dark-solid" href="{% url 'rsvp:index' %}">RSVP</a>
+        <a class="btn btn--on-dark-ghost" href="#day">The details</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="top-nav" role="navigation" aria-label="On this page">
+    <div class="top-nav__inner">
+      <a class="top-nav__brand" href="#top">K &amp; S</a>
+      <nav class="top-nav__links">
+        <a class="top-nav__link" href="#story">Our story</a>
+        <a class="top-nav__link" href="#day">The day</a>
+        <a class="top-nav__link" href="#travel">Travel</a>
+        <a class="top-nav__link" href="#photos">Photos</a>
+        <a class="top-nav__link" href="#registry">Registry</a>
+        <a class="top-nav__link" href="#faq">FAQ</a>
+        <a class="top-nav__cta" href="{% url 'rsvp:index' %}">RSVP</a>
+      </nav>
+    </div>
+  </div>
+
+  <section class="story" id="story" aria-labelledby="story-title">
+    <div class="story__copy">
+      <div class="eyebrow">We're getting married</div>
+      <h2 class="story__title" id="story-title">Nine years after a very bad first date, we're doing this properly.</h2>
+      <p class="body-lead">We met in a parking lot in Sugar House, argued about a movie neither of us had seen, and somehow kept going. Now we'd like to stand under the pines at Louland Falls with the people who got us here.</p>
+      <p class="body-lead">Come early, stay late, wear shoes you can walk in. There's a creek.</p>
+      <div class="story__signature">
+        <span class="story__signature-rule" aria-hidden="true"></span>
+        <span class="story__signature-name">Kaitlyn &amp; Steven</span>
+      </div>
+    </div>
+    <div class="story__image">
+      <div class="img-slot img-slot--3-4-arch">ARCH PORTRAIT · 3:4<br>engagement — vertical, the two of you close</div>
+    </div>
+  </section>
+
+  <section class="day" id="day" aria-labelledby="day-title">
+    <div class="day__inner">
+      <div class="day__heading">
+        <div class="day__eyebrow">The shape of the day</div>
+        <h2 class="day__title" id="day-title">Late spring in the canyon</h2>
+        <p class="day__lead">Everything happens at Louland Falls — ceremony under the trees, dinner and dancing in the pavilion twenty steps away. Outdoors throughout. It's roughly 60&deg;F at sundown; bring a layer.</p>
+      </div>
+      <ol class="timeline" aria-label="Schedule for the day">
+        <li class="timeline__cell">
+          <span class="timeline__time">4:30</span>
+          <span class="timeline__label">Guests arrive</span>
+          <span class="timeline__note">Drinks on the lawn. Parking is on site, no shuttle needed.</span>
+        </li>
+        <li class="timeline__cell">
+          <span class="timeline__time">5:00</span>
+          <span class="timeline__label">Ceremony</span>
+          <span class="timeline__note">Under the pines by the falls. Twenty-five minutes, we promise.</span>
+        </li>
+        <li class="timeline__cell">
+          <span class="timeline__time">6:00</span>
+          <span class="timeline__label">Dinner</span>
+          <span class="timeline__note">Seated, in the pavilion. You'll pick a main when you RSVP.</span>
+        </li>
+        <li class="timeline__cell">
+          <span class="timeline__time">8:00</span>
+          <span class="timeline__label">Dancing</span>
+          <span class="timeline__note">Until eleven. Cake somewhere in the middle.</span>
+        </li>
+      </ol>
+      <div class="day__footer">
+        <div>
+          <span class="day__dress-label">Dress</span>
+          <span class="day__dress-value">Garden formal — flat shoes welcome</span>
+        </div>
+        <a class="link-under link-under--on-dark" href="#faq">More questions answered &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="photo-break" aria-hidden="true">
+    FULL-BLEED BREAK · 16:9<br>engagement — landscape, mountains behind you
+  </section>
+
+  <section class="travel" id="travel" aria-labelledby="travel-title">
+    <div class="travel__head">
+      <div class="travel__head-copy">
+        <div class="eyebrow">Travel &amp; where to stay</div>
+        <h2 class="h-section" id="travel-title">Fly into SLC — it's twenty minutes from downtown.</h2>
+        <p class="body">We're holding rooms at two hotels downtown. The venue is a thirty-five minute drive up the canyon from either; rent a car or plan to carpool.</p>
+      </div>
+      <a class="btn btn--secondary" href="{% url 'pages:travel' %}">All travel details</a>
+    </div>
+    <div class="travel__grid">
+      <article class="info-card">
+        <div class="eyebrow">Room block · closer</div>
+        <div class="info-card__title">Kimpton Hotel Monaco</div>
+        <p class="body--sm">$189/night · code <strong>MASONNIELSEN</strong><br>Book by 22 April 2027</p>
+        <a class="link-under" href="{% url 'pages:travel' %}">Reserve a room &rarr;</a>
+      </article>
+      <article class="info-card">
+        <div class="eyebrow">Room block · cheaper</div>
+        <div class="info-card__title">Hyatt Place Downtown</div>
+        <p class="body--sm">$142/night · code <strong>KSMAY27</strong><br>Book by 22 April 2027</p>
+        <a class="link-under" href="{% url 'pages:travel' %}">Reserve a room &rarr;</a>
+      </article>
+      <article class="info-card info-card--raised">
+        <div class="eyebrow">Getting up the canyon</div>
+        <div class="info-card__title">Louland Falls</div>
+        <p class="body--sm">3600 S Big Cottonwood Canyon Rd<br>35 min from downtown · free parking on site</p>
+        <a class="link-under" href="{% url 'pages:travel' %}">Open in Maps &rarr;</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="photos-teaser" id="photos" aria-labelledby="photos-title">
+    <div class="photos-teaser__inner">
+      <div class="photos-teaser__head">
+        <div>
+          <div class="eyebrow">Photographs</div>
+          <h2 class="h-section" id="photos-title" style="margin-top: 0.75rem;">From the engagement shoot</h2>
+        </div>
+        <a class="btn btn--secondary" href="{% url 'pages:gallery' %}">See all photos</a>
+      </div>
+      <div class="photos-teaser__grid">
+        <div class="img-slot img-slot--1-1">1:1</div>
+        <div class="img-slot img-slot--1-1">1:1</div>
+        <div class="img-slot img-slot--1-1">1:1</div>
+        <div class="img-slot img-slot--1-1">1:1</div>
+      </div>
+      <p style="margin: 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--text-muted);">Four square tiles · full gallery page deferred to a later design spin</p>
+    </div>
+  </section>
+
+  <section class="rsvp-band" id="rsvp" aria-labelledby="rsvp-band-title">
+    <div class="rsvp-band__inner">
+      <div class="rsvp-band__eyebrow">Kindly reply by 1 April 2027</div>
+      <h2 class="rsvp-band__title" id="rsvp-band-title">Will you be there?</h2>
+      <p class="rsvp-band__lead">You'll need the code on the back of your invitation — it takes about a minute.</p>
+      <a class="btn btn--gold" href="{% url 'rsvp:index' %}" style="margin-top: 0.5rem;">RSVP now</a>
+    </div>
+  </section>
+
+  <section class="reg-faq" aria-label="Registry and FAQ">
+    <div id="registry" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <div class="eyebrow">Registry</div>
+      <h2 class="h-block">Your presence is the thing. But if you insist &mdash;</h2>
+      <div class="registry-list">
+        <a href="{% url 'pages:registry' %}"><span>Crate &amp; Barrel</span><span>&rarr;</span></a>
+        <a href="{% url 'pages:registry' %}"><span>REI</span><span>&rarr;</span></a>
+        <a href="{% url 'pages:registry' %}"><span>Honeymoon fund</span><span>&rarr;</span></a>
+      </div>
+    </div>
+    <div id="faq" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <div class="eyebrow">Questions</div>
+      <h2 class="h-block">The things everyone asks</h2>
+      <div class="faq-list">
+        <div class="faq-item">
+          <div class="faq-item__q">Can I bring my kids?</div>
+          <div class="faq-item__a">We'd love to see them at the ceremony. Dinner is adults-only — we can recommend a sitter downtown.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-item__q">Is it all outside?</div>
+          <div class="faq-item__a">Yes. The pavilion is covered and heated, but the ground is grass and gravel. Rain plan is the same pavilion.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-item__q">Can I bring a date?</div>
+          <div class="faq-item__a">If your invitation includes a plus-one, the RSVP form will say so when you enter your code.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
