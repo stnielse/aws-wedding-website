@@ -16,6 +16,9 @@ Every non-trivial working session begins by creating a session log at `.claude/s
 
 Trivial one-off fixes (typo, single-file question) do not need a session log. Sessions that make design or scope decisions always do.
 
+### Tests before finalization
+Unit tests are the **penultimate step** of every session that ships code — written and passing *before* the session log gets finalized. The order is: implementation → smoke test → tests written and passing → session log finalized. Never finalize the log with tests still in a `[ ]` progress checkbox; a session that couldn't land its tests documents *why* under "Digressions" and leaves the checkbox unchecked so the next session's handoff picks it up.
+
 ## Project context
 
 Self-hosted wedding website targeting live-and-stable by end of June 2026. Full scope, architecture, models, and phase plan live in `.claude/wedding-site-handoff.md` — that document is the source of truth for the build.
@@ -29,6 +32,14 @@ Self-hosted wedding website targeting live-and-stable by end of June 2026. Full 
 - **CDN/TLS:** CloudFront, ACM cert in us-east-1
 - **IaC:** Terraform for every AWS resource; `terraform destroy` must be clean
 - **CI/CD:** GitHub Actions → SSM `send-command`, OIDC federation (no long-lived keys)
+
+### Local paths (pinned — do not search for these)
+- **Django Python interpreter:** `/Users/stevennielsen/aws-wedding-website/.venv/bin/python`
+  - Use this exact path for every `manage.py` / `pip` / `django-admin` invocation. Do not `which python`, `ls .venv`, or otherwise probe for it — it lives at repo root, not under `backend/`.
+  - Repo-relative equivalent (from repo root): `.venv/bin/python`
+- **Django project root:** `/Users/stevennielsen/aws-wedding-website/backend/` (where `manage.py` lives).
+- **Frontend root:** `/Users/stevennielsen/aws-wedding-website/frontend/`. Use `pnpm` via corepack (`packageManager` field in `frontend/package.json` pins the version).
+- **Runserver port:** `8765`. **Vite dev server:** `http://localhost:5175/` — NOT `127.0.0.1` (Vite 8 quirk from Session 6).
 
 ## Critical rules (from handoff)
 - Never use root AWS credentials — IAM admin user only
