@@ -190,6 +190,10 @@ button { font: inherit; }
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--surface-border);
+  transition: box-shadow var(--duration-med) var(--ease-out);
+}
+.top-nav.is-revealed {
+  box-shadow: var(--shadow-md);
 }
 .top-nav__inner {
   max-width: 1400px;

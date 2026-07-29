@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Kaitlyn &amp; Steven · 23 May 2027 · Louland Falls{% endblock %}
 
 {# Home has its own in-content sticky nav with anchor links; suppress the default site nav above the hero. #}
@@ -185,4 +186,8 @@
       </div>
     </div>
   </section>
+{% endblock %}
+
+{% block scripts %}
+  <script defer src="{% static 'js/nav-reveal.js' %}"></script>
 {% endblock %}
