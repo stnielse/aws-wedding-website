@@ -9,11 +9,17 @@ class FAQ(models.Model):
     class Meta:
         ordering = ['order']
 
+    def __str__(self):
+        return self.question
+
 
 class RegistryLink(models.Model):
     name = models.CharField(max_length=200)   # e.g. "Crate & Barrel"
     url = models.URLField()
     order = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return self.name
 
 
 class HotelBlock(models.Model):
@@ -24,3 +30,6 @@ class HotelBlock(models.Model):
     rate = models.CharField(max_length=100, blank=True)  # e.g. "$189/night"
     cutoff_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.hotel_name
