@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}RSVP · Kaitlyn &amp; Steven{% endblock %}
+
+{% block content %}
+  <main class="rsvp-page">
+    <div class="rsvp-page__intro">
+      <div class="rsvp-page__label">RSVP · Louland Falls · 23 May 2027</div>
+      <h1 class="rsvp-page__title">Let's find your invitation</h1>
+      <p class="rsvp-page__lead">Enter the code printed on the back of your invitation. It's not case-sensitive. Please reply by <strong>{{ reply_by }}</strong>.</p>
+    </div>
+
+    <section class="rsvp-card" aria-labelledby="rsvp-card-title">
+      <header class="rsvp-card__hero">
+        <div class="rsvp-card__hero-inner">
+          <div class="rsvp-card__hero-eyebrow">Louland Falls · 23 May 2027</div>
+          <div class="rsvp-card__hero-title" id="rsvp-card-title">Kaitlyn <em>&amp;</em> Steven</div>
+          <div class="rsvp-card__hero-label">SHORT HERO · 1200&times;360 · engagement photo, cropped wide</div>
+        </div>
+      </header>
+      <div class="rsvp-card__body">
+        <form method="post" class="rsvp-lookup" novalidate>
+          {% csrf_token %}
+          {% if error %}
+            <div class="form-error-summary" role="alert">
+              <div class="form-error-summary__title">We hit a snag</div>
+              <p class="form-error-summary__body">{{ error }}</p>
+            </div>
+          {% endif %}
+          <label for="rsvp-code" class="form-label">Invitation code</label>
+          <input
+            id="rsvp-code"
+            name="code"
+            type="text"
+            class="form-input rsvp-lookup__input"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            required
+            aria-describedby="rsvp-code-help"
+          >
+          <div id="rsvp-code-help" class="form-help">Lost it? Email us and we'll look you up.</div>
+          <div class="rsvp-lookup__actions">
+            <button type="submit" class="btn btn--primary">Continue</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+{% endblock %}

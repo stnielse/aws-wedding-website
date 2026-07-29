@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}RSVP · Kaitlyn &amp; Steven{% endblock %}
+{% block title %}RSVP · {{ party.name }}{% endblock %}
 
 {% block content %}
   <main class="rsvp-page">
     <div class="rsvp-page__intro">
       <div class="rsvp-page__label">RSVP · Louland Falls · 23 May 2027</div>
       <h1 class="rsvp-page__title">RSVP</h1>
-      <p class="rsvp-page__lead">Two steps: the code from your invitation, then the form. It takes about a minute.</p>
+      <p class="rsvp-page__lead">Tap through, then send. It takes about a minute.</p>
     </div>
 
     <section class="rsvp-card" aria-labelledby="rsvp-card-title">
@@ -19,10 +19,11 @@
         </div>
       </header>
       <div class="rsvp-card__body">
-        <script type="application/json" id="rsvp-data">
-          {"csrfToken": "{{ csrf_token }}", "submitUrl": "/rsvp/submit/"}
-        </script>
-        <div id="rsvp-root"></div>
+        <script type="application/json" id="rsvp-data">{{ rsvp_data_json|safe }}</script>
+        <div id="rsvp-root">Loading the form…</div>
+        <noscript>
+          <p class="form-help">This form needs JavaScript. If you can't run it, please email us and we'll take your reply by hand.</p>
+        </noscript>
       </div>
     </section>
   </main>
