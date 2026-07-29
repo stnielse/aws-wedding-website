@@ -107,28 +107,99 @@ Still out of scope this session (deferred to Session 9+):
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] Model migrations for `rsvp` + `gallery` written and applied.
-- [ ] Admin registrations updated; `__str__` methods added.
-- [ ] `rsvp/urls.py` reshaped to landing / party / submit.
-- [ ] `rsvp/views.py` implements landing, party, submit.
-- [ ] `rsvp_landing.html` and `rsvp_party.html` templates in place; old `rsvp.html` removed.
-- [ ] `RsvpForm.jsx` real implementation replacing the stub.
-- [ ] `nav-reveal.js` written and loaded on home only.
-- [ ] End-to-end smoke test with a real Party in admin.
-- [ ] Tests in `backend/rsvp/tests.py` — landing, party 404 / 200, submit valid / invalid (penultimate).
-- [ ] Session log finalized.
+- [x] Model migrations for `rsvp` + `gallery` written and applied (hand-written `0002` for rsvp because Django would have prompted for an FK default; `0002_photo_alt_text` for gallery is auto-generated).
+- [x] Admin registrations upgraded with `list_display` / `search_fields` / `autocomplete_fields`; `__str__` methods added on all six models.
+- [x] `rsvp/urls.py` reshaped to landing / party / submit (`app_name = 'rsvp'`, names `landing`, `party`, `submit`). All six templates that referenced the old `rsvp:index` renamed to `rsvp:landing`.
+- [x] `rsvp/views.py` implements landing (GET+POST), party (`@ensure_csrf_cookie`, `get_token`), submit (POST JSON in, JSON out). Server validates: attending Y/N, meal in `MEAL_CHOICES`, plus-one name + meal required when plus_one_attending, guest_id must belong to this party.
+- [x] `rsvp_landing.html` and `rsvp_party.html` templates in place; old `rsvp.html` removed. Landing is a plain HTML `<form>`; party page hosts the `#rsvp-data` JSON + `#rsvp-root` island.
+- [x] `RsvpForm.jsx` real implementation replacing the stub — code lookup handoff, per-guest form sections, error summary with focus-move, plus-one card group with disabled name/meal fields, editable receipt.
+- [x] `nav-reveal.js` written and loaded on home only via `home.html`'s `{% block scripts %}`. IntersectionObserver toggles `.top-nav.is-revealed` for the entrance shadow.
+- [x] End-to-end smoke test — user click-through of `/`, `/rsvp/`, `/rsvp/FALLS-3K7/`, form → receipt → change-answer → back to form. Nav-reveal on scroll verified. curl matrix: `/`, `/rsvp/`, `/rsvp/FALLS-3K7/`, `/rsvp/falls-3k7/`, `/rsvp/CANYON-9M/`, `/travel/`, `/registry/`, `/gallery/`, `/static/frontend/assets/main.js`, `/static/js/nav-reveal.js`, `/static/css/site.css` all 200; `/rsvp/NOPE-XYZ/` 404.
+- [x] Tests in `backend/rsvp/tests.py` — 21 tests across 4 classes (LandingTests, PartyPageTests, SubmitTests, ModelTests). All passing. `SubmitTests` uses `Client(enforce_csrf_checks=True)` and warms up the csrftoken cookie via a GET against the party page.
+- [x] Session log finalized (this section).
 
 ### Digressions worth remembering
 
-_(filled during work)_
+**`makemigrations --noinput` bails on a non-null FK swap.** Adding `Guest.party = ForeignKey(...)` without `null=True` while simultaneously removing `Guest.lookup_code` made Django refuse to auto-generate the migration in non-interactive mode. Reason: Django needs a default value to populate existing rows, and `--noinput` can't prompt. The Guest table was empty in our dev DB, so the "default" was never actually going to be applied — but Django's check runs regardless. Fix: hand-write the migration with `preserve_default=False` and a sentinel `default=1`. Documented in the migration file so we can port this cleanly when the Postgres prod DB gets built.
+
+**`csrfToken` in the JSON payload is not optional.** First submit test 403'd with "CSRF cookie not set" — the party template had no `{% csrf_token %}` template tag, so Django never set the `csrftoken` cookie on the GET, and the React fetch had nothing to send. Two fixes in one: `@ensure_csrf_cookie` on the `party` view forces the cookie set, and `get_token(request)` puts the value into the JSON payload so the fetch's `X-CSRFToken` header matches. Learn once, apply everywhere React-in-Django posts back.
+
+**Session 5's `Client(SERVER_NAME='127.0.0.1')` workaround doesn't apply inside `TestCase`.** Django's `TestCase` auto-adds `testserver` to `ALLOWED_HOSTS` for the run — plain `Client()` works. The 127.0.0.1 workaround was only needed for `manage.py shell` `Client` usage.
+
+**CSRF-enforced test setup pattern.** `Client(enforce_csrf_checks=True)` is off by default in tests. Turned it on in `SubmitTests` and warm up the cookie exactly the way the browser would — an initial GET against the party page whose response sets `csrftoken`, then a POST that echoes the same value via `HTTP_X_CSRFTOKEN`. Now the test suite covers the CSRF path end-to-end instead of bypassing it.
+
+**HTML entity escaping bit the first assertion.** `assertContains(response, "can't find that code")` failed because Django escaped the apostrophe to `&#x27;`. Switch the assertion to a substring without punctuation (`Double-check the invitation`). General rule: `assertContains` compares against the raw HTML; assert on unpunctuated substrings, or use `html=True` and match a fragment.
+
+**Sticky nav "reveal" was mostly CSS already.** Session 7 deferred this expecting non-trivial JS, but `.top-nav` was already `position: sticky; top: 0`, so it appears naturally as the hero scrolls up. The "reveal" polish is a single class toggled by an IntersectionObserver — 8 real lines of JS — and only controls whether the nav gets an entrance shadow. Cheap.
+
+**Nav-reveal has a first-paint flicker on refresh mid-page.** If you refresh with the nav already stuck at top, `.is-revealed` isn't set until the IntersectionObserver fires (after `defer`red script executes). The shadow snaps in ~50-100ms later. Not worth SSR'ing a class for; noting so we don't chase it.
+
+**Meal choices carry both value and label in the receipt payload.** The React receipt renders "Trout, almondine" not "trout", so the view helper (`_rsvp_to_dict`) resolves each stored value against `dict(MEAL_CHOICES)` and includes `meal_choice_label` + `plus_one_meal_label`. Keeps the client dumb — it just displays what the server returned.
+
+**Party model has `verbose_name_plural = 'parties'`.** Django's default pluralizer would have said "Partys" in the admin. One-liner Meta override.
+
+**Test-seed script left an artifact.** The user's click-through created RSVPs on `FALLS-3K7`; between demos, wipe via `RSVP.objects.filter(guest__party__lookup_code='FALLS-3K7').delete()` (or use the code above). Session 9 could add a `manage.py reset_test_parties` management command if this becomes routine.
 
 ## Files created / modified this session
 
-_(filled during work)_
+**Created:**
+- `.claude/sessions/2026-07-29-session-08-phase2-rsvp-flow.md` — this log
+- `backend/rsvp/migrations/0002_party_meal_choices_and_guest_fk.py` — hand-written; creates Party, swaps Guest.lookup_code → Guest.party FK, adds meal `choices=` on RSVP
+- `backend/gallery/migrations/0002_photo_alt_text.py` — auto-generated; adds Photo.alt_text
+- `backend/templates/rsvp_landing.html` — state 1 code lookup (plain Django form)
+- `backend/templates/rsvp_party.html` — state 2/3/4 host for the React island
+- `backend/static/js/nav-reveal.js` — IntersectionObserver toggling `.top-nav.is-revealed`
+- `backend/rsvp/tests.py` — 21 tests, 4 classes (was empty scaffold)
+
+**Modified:**
+- `CLAUDE.md` — added "Tests before finalization" rule; added "Local paths (pinned)" section with venv Python + runserver port + Vite quirk
+- `backend/rsvp/models.py` — MEAL_CHOICES module constant; Party model with lookup_code save-normalization; Guest gains `party` FK, drops `lookup_code`; RSVP.meal_choice + plus_one_meal gain `choices=`; `__str__` on all three
+- `backend/rsvp/admin.py` — ModelAdmin subclasses with list_display / search_fields / autocomplete_fields; Party registered
+- `backend/rsvp/urls.py` — landing / party / submit routes; old `index` name retired
+- `backend/rsvp/views.py` — full rewrite: landing (GET+POST), party (`@ensure_csrf_cookie`, JSON serialize), submit (POST JSON with per-field validation, update_or_create per guest)
+- `backend/gallery/models.py` — added Photo.alt_text; added `__str__`
+- `backend/gallery/admin.py` — ModelAdmin with list_display / search_fields
+- `backend/pages/models.py` — added `__str__` on FAQ, RegistryLink, HotelBlock
+- `backend/static/css/site.css` — added form primitives (label, input, select, textarea, btn, error summary), rsvp-lookup (state 1), rsvp-form (state 2/3), rsvp-receipt (state 4), choice-cards, plus-one-block; added `.top-nav.is-revealed` shadow hook
+- `backend/templates/base.html` — renamed `rsvp:index` → `rsvp:landing`
+- `backend/templates/home.html` — renamed `rsvp:index` → `rsvp:landing`; added `{% load static %}` and `{% block scripts %}` loading `nav-reveal.js`
+- `backend/templates/coming_soon.html` — renamed `rsvp:index` → `rsvp:landing`
+- `frontend/src/RsvpForm.jsx` — real implementation (was a JSON-dump stub): per-guest sections, choice cards, error summary with focus-move, plus-one block, editable receipt
+
+**Deleted:**
+- `backend/templates/rsvp.html` — split into `rsvp_landing.html` + `rsvp_party.html`
+
+**Also touched (not tracked by git):**
+- `backend/db.sqlite3` — two new migrations applied; two seed Parties (`FALLS-3K7`, `CANYON-9M`) with 6 total Guests for the smoke test
+- `backend/static/frontend/assets/main.js` — Vite build output, 199.86 KB (gzip 62.73 KB), same path as Session 7
+- Ephemeral: two runserver processes started + killed during smoke test; `/tmp/rsvp-cookies.txt` for the curl smoke test
+
+Per working contract, all `git add` / `git commit` is left to the user.
 
 ## Session 9 handoff
 
-_(filled at end of session)_
+Session 9 is the first Phase 3 session — cloud storage for gallery photos. Prep list:
+
+1. **Wire `django-storages` for S3.** Pin exact version in `backend/requirements/base.txt`. Configure `STORAGES['default'] = {'BACKEND': 'storages.backends.s3.S3Storage', ...}` in `production.py` only; `local.py` keeps local-media behavior. Bucket name + IAM policy live in the existing Terraform.
+2. **CloudFront OAC in front of the bucket.** OAC (Origin Access Control), not the deprecated OAI. Signed private-bucket → public-URL flow. Cache-Control on Photo uploads = 1 year, immutable.
+3. **Real photo uploads.** Django admin's default `ImageField` upload widget → `django-storages` → S3. Verify pillow can read the uploaded file back via `Photo.image.url` (should be a CloudFront URL in prod).
+4. **Swap the home page's striped-div placeholders for real `<img>`.** Hero, arch portrait, photo break, photos teaser. `srcset` at 640/1024/1600/2400, `loading="lazy"` below the fold, explicit `width`/`height`.
+5. **Cache-busting for `main.js`.** Decide: `ManifestStaticFilesStorage` (Django-side hashing) or re-enable Vite hashing + Vite's `manifest.json` read via templatetag. Pick and pin.
+6. **Model `__str__` follow-ups?** All models now have them. Remaining polish: `list_display` on FAQ / RegistryLink / HotelBlock (currently plain `admin.site.register`).
+
+Also potentially worth folding in:
+- **`cost-guard` and `wedding-copy-editor` subagents** (from the handoff, still deferred).
+- **Cost check.** After S3+CloudFront lands, verify AWS bill projection is still <$5/month for the July–May 2027 lifetime. Handoff's cost estimate assumes minimal traffic.
+
+Before touching anything in Session 9:
+
+- Read this file (Session 8), plus Session 7's design integration notes for token/CSS names.
+- Re-read handoff's Phase 3 section + the CloudFront amendment.
+- **Python:** `/Users/stevennielsen/aws-wedding-website/.venv/bin/python` (now pinned in CLAUDE.md).
+- **Frontend:** `pnpm` via corepack from `frontend/`.
+- **Runserver:** 8765. **Vite dev:** `http://localhost:5175/`, not `127.0.0.1` (Vite 8 quirk).
+- Every direct dep gets exact-pinned per [[feedback-strict-version-pins]].
+- Tests are the penultimate step per the working contract addition this session.
 
 ## Open questions / follow-ups
 
