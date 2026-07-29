@@ -5,5 +5,7 @@ from . import views
 app_name = 'rsvp'
 
 urlpatterns = [
-    path('', views.rsvp, name='index'),
+    path('', views.landing, name='landing'),
+    path('<str:code>/', views.party, name='party'),
+    path('<str:code>/submit/', views.submit, name='submit'),
 ]
