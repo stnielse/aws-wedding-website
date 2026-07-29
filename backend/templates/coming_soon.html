@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }} · Kaitlyn &amp; Steven{% endblock %}
+{% block content %}
+  <section class="section">
+    <div class="wrap wrap--narrow" style="display: flex; flex-direction: column; gap: 1.25rem; text-align: center; padding-block: clamp(4rem, 10vw, 7rem);">
+      <div class="eyebrow">Coming soon</div>
+      <h1 class="h-section">{{ page_title }}</h1>
+      <p class="body">This page is on the way. In the meantime, the home page has the short version — or head to the RSVP if that's what you're here for.</p>
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; padding-top: 0.5rem;">
+        <a class="btn btn--secondary" href="{% url 'pages:home' %}">Back to home</a>
+        <a class="btn btn--primary" href="{% url 'rsvp:index' %}">RSVP</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}
