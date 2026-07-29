@@ -1,8 +1,10 @@
 import json
 
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.middleware.csrf import get_token
+from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
 from .models import MEAL_CHOICES, Party, RSVP
@@ -33,6 +35,7 @@ def landing(request):
     return render(request, 'rsvp_landing.html', {'error': error, 'reply_by': REPLY_BY_DATE})
 
 
+@ensure_csrf_cookie
 def party(request, code):
     party_obj = _party_by_code(code)
     if party_obj is None:
@@ -43,6 +46,7 @@ def party(request, code):
     existing = {r.guest_id: r for r in RSVP.objects.filter(guest_id__in=guest_ids)}
 
     data = {
+        'csrfToken': get_token(request),
         'submitUrl': reverse('rsvp:submit', kwargs={'code': party_obj.lookup_code}),
         'party': {
             'name': party_obj.name,
