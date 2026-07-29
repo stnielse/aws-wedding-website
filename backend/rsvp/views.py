@@ -153,15 +153,20 @@ def submit(request, code):
     return JsonResponse({'ok': True, 'receipt': receipt})
 
 
+_MEAL_LABELS = dict(MEAL_CHOICES)
+
+
 def _rsvp_to_dict(rsvp):
     return {
         'guest_id': rsvp.guest_id,
         'guest_name': rsvp.guest.name,
         'attending': rsvp.attending,
         'meal_choice': rsvp.meal_choice,
+        'meal_choice_label': _MEAL_LABELS.get(rsvp.meal_choice, ''),
         'plus_one_attending': rsvp.plus_one_attending,
         'plus_one_name': rsvp.plus_one_name,
         'plus_one_meal': rsvp.plus_one_meal,
+        'plus_one_meal_label': _MEAL_LABELS.get(rsvp.plus_one_meal, ''),
         'notes': rsvp.notes,
         'submitted_at': rsvp.submitted_at.isoformat() if rsvp.submitted_at else None,
     }
