@@ -89,22 +89,59 @@ Session 8+ can pick them up):
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] Style Guide tokens extracted into `tokens.css`.
-- [ ] Fonts self-hosted under `backend/static/fonts/`; `fonts.css` wired.
-- [ ] `base.html` rewritten with tokens + nav + footer.
-- [ ] Home page mock ported to `home.html`; pages view + `/` URL added.
-- [ ] RSVP landing chrome ported to `rsvp.html`.
-- [ ] URL stubs for `/travel/`, `/registry/`, `/gallery/`.
-- [ ] Smoke test: `/` renders with design system; `/rsvp/` island mounts under new chrome; nav links resolve.
-- [ ] Session log finalized (this section).
+- [x] Style Guide tokens extracted into `backend/static/css/tokens.css` (single `:root` partial: colors, fluid clamp() type scale, 4px space scale, radii, green-tinted shadows, focus ring, container widths, motion).
+- [x] Fonts self-hosted under `backend/static/fonts/`; `fonts.css` wired with `@font-face` + `font-display: swap`. **Three** files, not seven — see digression.
+- [x] `base.html` rewritten as site chrome: loads tokens/fonts/site CSS, sticky nav with 5 items (Home / Travel / Registry / Photos / RSVP-as-filled-button), forest-800 footer that repeats every link + date + venue, `{% block nav %}` / `{% block content %}` / `{% block footer %}` / `{% block scripts %}`.
+- [x] Home page mock ported to `home.html` — hero, on-page anchor nav (overrides `{% block nav %}`), story with arch portrait, dark-green schedule timeline, photo break, travel cards, photos teaser grid, RSVP band, registry + FAQ, footer inherited from base. Image slots are striped-div placeholders per the design's own port rule.
+- [x] RSVP landing chrome ported to `rsvp.html`: cream-border page background, intro copy, then a card with the short green hero and the React island stub (`#rsvp-root` / `#rsvp-data`) mounted below. Same island contract as Session 6.
+- [x] Pages app URLs wired: `/` → `home`, `/travel/` → `travel`, `/registry/` → `registry`, `/gallery/` → `gallery`. Non-home three share `coming_soon.html` with a page title. `config/urls.py` includes `pages.urls` at root.
+- [x] Smoke test: user visually confirmed `/`, `/rsvp/`, and coming-soon pages render with the design system applied and self-hosted fonts loading. Also automated `curl -I` on `/`, `/rsvp/`, `/travel/`, `/registry/`, `/gallery/` (all 200) and on `tokens.css`, `fonts.css`, `site.css`, `Karla-400-600-latin.woff2`, `frontend/assets/main.js` (all 200).
+- [x] Session log finalized (this section).
 
 ### Digressions worth remembering
 
-_(Filled in as they come up.)_
+**Google Fonts now serves variable-font woff2. The "seven files" number in the design is stale.**
+The Style Guide asked for seven latin woff2 subsets (Cormorant 300/400/500/400i + Karla 400/500/600, ~120 KB). Google Fonts' CSS2 API today returns a single variable-font URL that covers the whole normal-weight range of a family. So we ended up with **three files, 84 KB** — one Cormorant variable (weight range 300-500), one Cormorant italic (weight 400), one Karla variable (weight range 400-600). Declared in `fonts.css` with `font-weight: 300 500` / `font-weight: 400 600` ranges. Smaller footprint, same result. Filenames encode the range: `CormorantGaramond-300-500-latin.woff2`, `CormorantGaramond-400i-latin.woff2`, `Karla-400-600-latin.woff2`.
+
+**Fetching gotcha.** Google's CSS API serves woff2 URLs only to modern-browser user-agents. The default `curl` UA gets *nothing* (empty CSS). Fix: pass a Chrome UA (`-A 'Mozilla/5.0 ... Chrome/122...'`). Same UA also has to be sent when downloading the woff2 itself; Google gates on `Referer`-less requests too sometimes but a UA alone was enough.
+
+**Bash `while read` and trailing newlines.** First font-download loop wrote a 7-line manifest with no trailing newline; `while IFS=$'\t' read -r ...` silently dropped the last line, and I ended up missing Karla-600. Root cause is a familiar POSIX-ism (`read` returns non-zero on EOF-without-newline and skips the partial line). If we ever script the EC2 fetch of these fonts, either add `[ -n "$line" ] &&` inside the loop or terminate the input properly.
+
+**CSS architecture chose "small utility set + component classes".** Three CSS files under `backend/static/css/`: `tokens.css` (variables only), `fonts.css` (`@font-face` only), `site.css` (everything else — reset, layout primitives, buttons, nav, footer, hero, all home-page section styles, RSVP-page chrome). No CSS framework; templates use classes instead of inline styles. `site.css` is ~600 lines but flat and reads top-to-bottom by page/section — easy to grep. Considered splitting into `layout.css` + `home.css` + `rsvp.css` but the total is small and one file loads with one request; revisit if it grows past ~1500 lines.
+
+**Sticky nav on the home page has two variants.** `base.html` renders a default site-level `{% block nav %}` — used on `/rsvp/`, `/travel/`, `/registry/`, `/gallery/`. `home.html` overrides `{% block nav %}` to empty (so nothing sits above the hero) and then renders its own in-content `.top-nav` **below** the hero with anchor links (`#story`, `#day`, `#travel`, `#photos`, `#registry`, `#faq`). This matches the mock exactly ("in the mock the bar simply sits below the hero"). The "appears after hero scroll" behavior stays deferred — same `.top-nav` element, and once we add ~20 lines of vanilla JS in Session 8 (IntersectionObserver on the hero) it just works.
+
+**`STATICFILES_DIRS` from Session 6 already covers this.** `backend/static/{css,fonts}/` were picked up by `runserver`'s static finder without any settings change — Session 6 added `STATICFILES_DIRS = [BASE_DIR / 'static']` when Vite's build output was outside an app dir, and that setting covers the new dirs too.
+
+**`{% url 'pages:travel' %}` etc. required creating `pages/urls.py` from scratch.** The pages app existed after Session 5 but had no URL config yet — routing `/` was still open. Wired it here rather than deferring, because `base.html`'s nav needs every URL name to resolve or every template render blows up.
+
+**Coming-soon template pattern.** Rather than three near-identical templates for `/travel/`, `/registry/`, `/gallery/`, one `coming_soon.html` takes a `page_title` context var. Cheap DRY; when Session 8 builds `/travel/` for real, that view swaps to `travel.html` and `coming_soon.html` stays around for the remaining two.
 
 ## Files created / modified this session
 
-_(Filled in at wrap.)_
+**Created:**
+- `.claude/sessions/2026-07-28-session-07-design-integration.md` — this log
+- `backend/static/css/tokens.css` — design tokens (colors, type, space, radii, shadows, focus ring, container, motion)
+- `backend/static/css/fonts.css` — self-hosted `@font-face` declarations for Cormorant Garamond + Karla, weight-range variable fonts
+- `backend/static/css/site.css` — site-wide styles (reset, layout, buttons, top nav, footer, hero, story, day/timeline, travel, photos-teaser, RSVP band, registry+FAQ, RSVP page chrome, image placeholders)
+- `backend/static/fonts/CormorantGaramond-300-500-latin.woff2` — variable font (300-500 normal)
+- `backend/static/fonts/CormorantGaramond-400i-latin.woff2` — italic weight 400
+- `backend/static/fonts/Karla-400-600-latin.woff2` — variable font (400-600 normal)
+- `backend/templates/home.html` — home page (hero, on-page nav, story, day, photo break, travel, photos teaser, RSVP band, registry+FAQ)
+- `backend/templates/coming_soon.html` — placeholder for `/travel/`, `/registry/`, `/gallery/`
+- `backend/pages/urls.py` — `app_name = 'pages'`; routes for `home`, `travel`, `registry`, `gallery`
+
+**Modified:**
+- `backend/templates/base.html` — full site chrome; loads tokens/fonts/site CSS; renders sticky top nav + footer as blocks; `{% block content %}` between them
+- `backend/templates/rsvp.html` — landing chrome ported from RSVP.dc.html state 1; keeps `#rsvp-root` + `#rsvp-data`; React island contract unchanged
+- `backend/pages/views.py` — `home`, `travel`, `registry`, `gallery` views (last three share `coming_soon.html`)
+- `backend/config/urls.py` — includes `pages.urls` at `''`
+
+**Not tracked by git (background scratch):**
+- `/tmp/gfonts.css` — the Google Fonts CSS2 response used to extract woff2 URLs
+- `/tmp/font_manifest.txt` — intermediate filename→URL mapping
+
+Per working contract, all `git add` / `git commit` is left to the user.
 
 ## Session 8 handoff
 
