@@ -58,14 +58,14 @@ Still out of scope this session (deferred to Session 9+):
    - Notes textarea (per guest)
    Submit posts `[{ guest_id, attending, meal_choice, plus_one_attending, plus_one_name, plus_one_meal, notes }, ...]` to `props.submitUrl` with `X-CSRFToken: props.csrfToken`. On 200 with `receipt`, render state 4. On 400 with `errors`, render state 3 (summary at top, per-field red state).
 6. **Sticky-nav reveal.** New `backend/static/js/nav-reveal.js`. IntersectionObserver on `.hero` — when it stops intersecting the viewport, toggle `body.is-nav-revealed`. Loaded from `home.html` only (the other pages don't have a hero the nav needs to appear over). ~20 lines.
-7. **Tests.** `backend/rsvp/tests.py`:
+7. Smoke test in browser: user creates a Party in admin with two Guests, hits `/rsvp/`, enters the code, submits, sees receipt.
+8. **Tests (penultimate step per working contract).** `backend/rsvp/tests.py`:
    - `GET /rsvp/` returns 200 and contains the lookup form
    - `GET /rsvp/<invalid>/` returns 404
    - `GET /rsvp/<valid>/` returns 200 and contains `id="rsvp-root"`
    - `POST /rsvp/<valid>/submit/` with a valid payload creates/updates RSVPs and returns `{ok: true}`
    - `POST /rsvp/<valid>/submit/` with an invalid payload returns 400 + `{ok: false, errors: [...]}`
    - Use `Client(SERVER_NAME='127.0.0.1')` per the Session 5 digression
-8. Smoke test in browser: user creates a Party in admin with two Guests, hits `/rsvp/`, enters the code, submits, sees receipt.
 9. Finalize this log.
 
 ---
