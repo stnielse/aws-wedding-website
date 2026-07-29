@@ -1,0 +1,28 @@
+/* Self-hosted webfonts — CSP will block external font hosts in production.
+   Files under backend/static/fonts/, downloaded from Google Fonts CSS2 API
+   (latin subset only). Google now serves these as variable fonts, so one
+   file covers a weight range — hence the ranges below. */
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 300 500;
+  font-display: swap;
+  src: url('/static/fonts/CormorantGaramond-300-500-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/CormorantGaramond-400i-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Karla';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/static/fonts/Karla-400-600-latin.woff2') format('woff2');
+}
