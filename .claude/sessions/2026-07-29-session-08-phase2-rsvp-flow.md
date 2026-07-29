@@ -114,8 +114,8 @@ Still out of scope this session (deferred to Session 9+):
 - [ ] `rsvp_landing.html` and `rsvp_party.html` templates in place; old `rsvp.html` removed.
 - [ ] `RsvpForm.jsx` real implementation replacing the stub.
 - [ ] `nav-reveal.js` written and loaded on home only.
-- [ ] Tests in `backend/rsvp/tests.py` — landing, party 404 / 200, submit valid / invalid.
 - [ ] End-to-end smoke test with a real Party in admin.
+- [ ] Tests in `backend/rsvp/tests.py` — landing, party 404 / 200, submit valid / invalid (penultimate).
 - [ ] Session log finalized.
 
 ### Digressions worth remembering
