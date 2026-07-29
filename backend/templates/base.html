@@ -3,10 +3,51 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Wedding{% endblock %}</title>
+    <title>{% block title %}Kaitlyn &amp; Steven · 23 May 2027{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Kaitlyn and Steven are getting married on 23 May 2027 at Louland Falls, Salt Lake City.{% endblock %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+    <link rel="stylesheet" href="{% static 'css/site.css' %}">
   </head>
   <body>
+    {% block nav %}
+      <div class="top-nav">
+        <div class="top-nav__inner">
+          <a class="top-nav__brand" href="{% url 'pages:home' %}">K &amp; S</a>
+          <nav class="top-nav__links" aria-label="Site">
+            <a class="top-nav__link" href="{% url 'pages:home' %}">Home</a>
+            <a class="top-nav__link" href="{% url 'pages:travel' %}">Travel</a>
+            <a class="top-nav__link" href="{% url 'pages:registry' %}">Registry</a>
+            <a class="top-nav__link" href="{% url 'pages:gallery' %}">Photos</a>
+            <a class="top-nav__cta" href="{% url 'rsvp:index' %}">RSVP</a>
+          </nav>
+        </div>
+      </div>
+    {% endblock %}
+
     {% block content %}{% endblock %}
+
+    {% block footer %}
+      <footer class="site-footer">
+        <div class="site-footer__inner">
+          <div class="site-footer__row">
+            <div>
+              <div class="site-footer__brand">Kaitlyn <em>&amp;</em> Steven</div>
+              <div class="site-footer__meta">23 May 2027 · Louland Falls · Salt Lake City, Utah</div>
+            </div>
+            <nav class="site-footer__nav" aria-label="Footer">
+              <a href="{% url 'pages:home' %}">Home</a>
+              <a href="{% url 'pages:travel' %}">Travel</a>
+              <a href="{% url 'pages:registry' %}">Registry</a>
+              <a href="{% url 'pages:gallery' %}">Photos</a>
+              <a class="is-cta" href="{% url 'rsvp:index' %}">RSVP</a>
+            </nav>
+          </div>
+          <div class="site-footer__meta-bar">Kaitlyn &amp; Steven · 23 May 2027 · Louland Falls, SLC</div>
+        </div>
+      </footer>
+    {% endblock %}
+
     {% block scripts %}{% endblock %}
   </body>
 </html>
