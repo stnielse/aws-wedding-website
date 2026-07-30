@@ -146,6 +146,22 @@ Out of scope this session (deferred to Session 10+):
 | Scope | Production only — `local.py` doesn't declare `STORAGES`, so dev keeps unhashed URLs and skips the manifest read (which would error on missing files). |
 | Trade-off | `collectstatic` becomes a required deploy step (already was per the handoff's deploy sketch). If we ever want dev to match prod behavior, a two-line addition to `local.py` flips it on locally too. |
 
+### Photos as dropped (2026-07-30)
+
+| Slot | Source dimensions | Source ratio | Display slot ratio | Notes |
+|---|---|---|---|---|
+| hero | 5680×3787 | 3:2 (1.50) | 16:9 → 3:4 on phone (CSS) | Sides get cropped a little via `object-fit: cover`. |
+| arch | 4672×6541 | ~5:7 (0.71) | 3:4 (CSS) | Nearly flush; minor top/bottom trim. |
+| break | 4718×3646 | 13:10 (1.29) | 16:9 (CSS) | Sides get cropped a bit via `object-fit: cover`. |
+| teaser-1 | 4257×5509 | ~3:4 (0.77) | 3:4 | Clean. |
+| teaser-2 | 4070×6105 | 2:3 (0.67) | 3:4 | Modest top/bottom trim via `object-fit: cover`. |
+| teaser-3 | 4672×6541 | ~5:7 (0.71) | 3:4 | Nearly flush. |
+| teaser-4 | 4672×6046 | ~3:4 (0.77) | 3:4 | Clean. |
+
+Teaser slot switched from **1:1** (design mock) to **3:4 vertical** (matches
+dropped photos; the mock is a wireframe placeholder, not authoritative on
+crop). Four vertical tiles at 22vw each on desktop reads as a photo strip.
+
 ### Srcset breakpoints
 
 | Area | Decision |
