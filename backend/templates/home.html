@@ -1,13 +1,19 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static engagement_photos %}
 {% block title %}Kaitlyn &amp; Steven · 23 May 2027 · Louland Falls{% endblock %}
 
 {# Home has its own in-content sticky nav with anchor links; suppress the default site nav above the hero. #}
 {% block nav %}{% endblock %}
 
 {% block content %}
+  {% engagement_photo 'hero' as hero %}
   <section class="hero" id="top" aria-label="Hero">
-    <div class="hero__label">FULL-BLEED HERO · 16:9 → 3:4 on phone<br>engagement photo — the two of you, canyon light, wide</div>
+    <img class="hero__img"
+         src="{{ hero.src }}" srcset="{{ hero.srcset }}"
+         sizes="100vw"
+         width="{{ hero.width }}" height="{{ hero.height }}"
+         loading="eager" decoding="async" fetchpriority="high"
+         alt="Kaitlyn and Steven at Louland Falls in the evening canyon light">
     <div class="hero__scrim"></div>
     <div class="hero__content">
       <div class="hero__eyebrow">Louland Falls · Salt Lake City, Utah</div>
@@ -51,7 +57,13 @@
       </div>
     </div>
     <div class="story__image">
-      <div class="img-slot img-slot--3-4-arch">ARCH PORTRAIT · 3:4<br>engagement — vertical, the two of you close</div>
+      {% engagement_photo 'arch' as arch %}
+      <img class="story__img"
+           src="{{ arch.src }}" srcset="{{ arch.srcset }}"
+           sizes="(min-width: 900px) 460px, 100vw"
+           width="{{ arch.width }}" height="{{ arch.height }}"
+           loading="lazy" decoding="async"
+           alt="Kaitlyn and Steven under the arch at Louland Falls">
     </div>
   </section>
 
@@ -94,8 +106,13 @@
     </div>
   </section>
 
+  {% engagement_photo 'break' as break_img %}
   <section class="photo-break" aria-hidden="true">
-    FULL-BLEED BREAK · 16:9<br>engagement — landscape, mountains behind you
+    <img class="photo-break__img"
+         src="{{ break_img.src }}" srcset="{{ break_img.srcset }}"
+         sizes="100vw"
+         width="{{ break_img.width }}" height="{{ break_img.height }}"
+         loading="lazy" decoding="async" alt="">
   </section>
 
   <section class="travel" id="travel" aria-labelledby="travel-title">
@@ -139,12 +156,15 @@
         <a class="btn btn--secondary" href="{% url 'pages:gallery' %}">See all photos</a>
       </div>
       <div class="photos-teaser__grid">
-        <div class="img-slot img-slot--1-1">1:1</div>
-        <div class="img-slot img-slot--1-1">1:1</div>
-        <div class="img-slot img-slot--1-1">1:1</div>
-        <div class="img-slot img-slot--1-1">1:1</div>
+        {% engagement_photo 'teaser-1' as t1 %}
+        {% engagement_photo 'teaser-2' as t2 %}
+        {% engagement_photo 'teaser-3' as t3 %}
+        {% engagement_photo 'teaser-4' as t4 %}
+        <img class="photos-teaser__img" src="{{ t1.src }}" srcset="{{ t1.srcset }}" sizes="(min-width: 900px) 22vw, 45vw" width="{{ t1.width }}" height="{{ t1.height }}" loading="lazy" decoding="async" alt="">
+        <img class="photos-teaser__img" src="{{ t2.src }}" srcset="{{ t2.srcset }}" sizes="(min-width: 900px) 22vw, 45vw" width="{{ t2.width }}" height="{{ t2.height }}" loading="lazy" decoding="async" alt="">
+        <img class="photos-teaser__img" src="{{ t3.src }}" srcset="{{ t3.srcset }}" sizes="(min-width: 900px) 22vw, 45vw" width="{{ t3.width }}" height="{{ t3.height }}" loading="lazy" decoding="async" alt="">
+        <img class="photos-teaser__img" src="{{ t4.src }}" srcset="{{ t4.srcset }}" sizes="(min-width: 900px) 22vw, 45vw" width="{{ t4.width }}" height="{{ t4.height }}" loading="lazy" decoding="async" alt="">
       </div>
-      <p style="margin: 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--text-muted);">Four square tiles · full gallery page deferred to a later design spin</p>
     </div>
   </section>
 
