@@ -194,27 +194,103 @@ crop). Four vertical tiles at 22vw each on desktop reads as a photo strip.
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] User drops seven source photos into `backend/static/img/engagement/`.
-- [ ] `resize_engagement_photos` management command written and run against the drop.
-- [ ] `home.html` template edited — hero, arch, photo-break, four teaser tiles now real `<img>`.
-- [ ] `site.css` gains fill-slot img rules.
-- [ ] `production.py` gains `ManifestStaticFilesStorage`.
-- [ ] Manifest verified via scratch `collectstatic`.
-- [ ] Smoke test in browser — real photos render, no CLS, nav-reveal still fires, teaser tiles lazy-load.
-- [ ] Tests added in `backend/pages/tests.py`.
-- [ ] Session log finalized (this section).
+- [x] User dropped seven source photos into `backend/static/img/engagement/` (5680×3787 hero, 4672×6541 arch, 4718×3646 break, four vertical teasers 4070–4672 wide).
+- [x] `resize_engagement_photos` management command written and run — 28 derivatives generated (7 slots × 4 widths) plus `dimensions.json` sidecar.
+- [x] `pages/templatetags/engagement_photos.py` exposes `{% engagement_photo <slot> %}` returning `{src, srcset, width, height}` via `staticfiles_storage.url` (Manifest-aware at request time).
+- [x] `home.html` edited — hero (eager, `fetchpriority="high"`), story arch (lazy), photo-break (lazy, empty alt as decorative), four teaser tiles (lazy). All `img-slot` placeholder divs on home removed.
+- [x] `site.css` gains `.hero__img`, `.story__img`, `.photo-break__img`, `.photos-teaser__img` rules; `.hero__label` (design annotation placeholder) removed; `.photo-break` shed its striped background + text-content padding.
+- [x] `production.py` swapped `StaticFilesStorage` → `ManifestStaticFilesStorage`. `local.py` untouched (still serves unhashed).
+- [x] Manifest verified via scratch `collectstatic --settings=config.settings.production --clear --noinput`: 171 files copied + post-processed; `staticfiles.json` maps each engagement derivative + `main.js` + `site.css` + `nav-reveal.js` to a content-hashed filename. Scratch output cleaned.
+- [ ] Smoke test in browser — real photos render, no CLS, nav-reveal still fires, teaser tiles lazy-load. _(pending user visual confirmation on the running dev server)_
+- [x] Tests added in `backend/pages/tests.py` — 10 tests across 2 classes. Full suite: 31 pass (21 rsvp + 10 pages).
+- [ ] Session log finalized (this section) — pending browser smoke test.
 
 ### Digressions worth remembering
 
-_(populated as we hit them)_
+**Teaser slot went from 1:1 to 3:4.** The design mock showed four square tiles; the dropped engagement photos are all vertical (2:3 to 3:4 range). Rather than square-cropping and losing composition, we switched the CSS `aspect-ratio` on `.photos-teaser__img` to `3 / 4`. Reads as a photo strip on desktop (four ~264×352 tiles at ~22vw), 2×2 on mobile. Session 10+ can revisit if the visual weight feels off.
+
+**Hero source is 3:2 (5680×3787), not the mock's 16:9.** `object-fit: cover` in `.hero__img` crops the sides in the 16:9-shaped slot. Visually indistinguishable from a native 16:9. Same story for `break.jpg` (13:10). Neither warrants re-shooting; the design mock's aspect specs are slot-intents, not source-file requirements.
+
+**`ManifestStaticFilesStorage` collectstatic writes both hashed and unhashed copies.** So a `collectstatic` produces `hero-2400.jpg` AND `hero-2400.<hash>.jpg` in `STATIC_ROOT`. Django serves the hashed one via `{% static %}` + the manifest; the unhashed copy is a fallback and takes disk space. For seven engagement photos × 4 widths that's ~28MB of duplication on EC2 — negligible for our footprint but worth remembering when Session 10 wires S3 (double the PUTs per deploy unless we set `keep_intermediate_files=False` on the storage backend or filter uploads).
+
+**`dimensions.json` is read via `BASE_DIR`, not `{% static %}`.** The template tag opens `settings.BASE_DIR / 'static' / 'img' / 'engagement' / 'derivatives' / 'dimensions.json'` at Python import time (module-level cache) rather than through the staticfiles URL system. Two consequences: (1) the running app needs the source `static/` dir on disk, which our EC2 layout gives it for free; (2) changes to `dimensions.json` require a Python reload (or Gunicorn restart) to pick up. Fine for content-frozen photos; if the photo set ever churns rapidly, add a management command that emits Python instead of JSON, or drop the module-level cache.
+
+**`fetchpriority="high"` on hero** is a modern browser hint for the LCP element. Chrome/Edge/Safari support it; older browsers ignore it silently. Zero downside to include.
+
+**No dev-server hashing.** `local.py` doesn't declare `STORAGES`, so it inherits Django's default `StaticFilesStorage` (unhashed URLs). Dev matches prod for markup shape but not for URLs — a `{% static %}` returns `/static/img/engagement/derivatives/hero-1600.jpg` in dev and `/static/img/engagement/derivatives/hero-1600.<hash>.jpg` in prod. Not worth flipping Manifest on locally: `collectstatic` would need to run on every static-file change, which kills iteration.
 
 ## Files created / modified this session
 
-_(populated at end of session)_
+**Created:**
+- `.claude/sessions/2026-07-30-session-09-home-photos-and-manifest.md` — this log
+- `backend/static/img/engagement/` (directory) — user-populated with 7 source JPEGs
+- `backend/static/img/engagement/derivatives/` — 28 resized JPEG variants + `dimensions.json`, generated by the resize command
+- `backend/gallery/management/__init__.py`
+- `backend/gallery/management/commands/__init__.py`
+- `backend/gallery/management/commands/resize_engagement_photos.py` — Pillow-driven, idempotent, JPEG 82 progressive, Lanczos resample
+- `backend/pages/templatetags/__init__.py`
+- `backend/pages/templatetags/engagement_photos.py` — `{% engagement_photo <slot> as x %}` template tag; module-level dimensions cache
+
+**Modified:**
+- `backend/config/settings/production.py` — `STORAGES['staticfiles']['BACKEND']` → `ManifestStaticFilesStorage`
+- `backend/templates/home.html` — added `{% load engagement_photos %}`; replaced hero placeholder div with `<img class="hero__img">` (eager, fetchpriority high); replaced `.img-slot--3-4-arch` with `<img class="story__img">`; replaced `.photo-break` text content with `<img class="photo-break__img">`; replaced four `.img-slot--1-1` placeholders with four `<img class="photos-teaser__img">`; removed the "Four square tiles" annotation copy
+- `backend/static/css/site.css` — dropped `.hero__label` block; added `.hero__img`, `.story__img`, `.photo-break__img`, `.photos-teaser__img` rules; `.photo-break` shed its striped background + monospace label padding
+- `backend/pages/tests.py` — replaced the empty scaffold with `HomePageTests` (7 tests) + `ComingSoonPagesTests` (3 tests)
+
+**Also touched (not tracked by git):**
+- Ephemeral: dev server + scratch `collectstatic` under prod settings; `staticfiles/` written then removed
+
+Per working contract, all `git add` / `git commit` is left to the user.
 
 ## Session 10 handoff
 
-_(populated at end of session — expected to hand off the Terraform / django-storages / S3+CloudFront-OAC chunk deferred from this session)_
+Session 10 picks up the Phase 3 (per handoff phase numbering) Terraform work
+deferred from Session 9. Prep list:
+
+1. **New `infra/` module** (not `infra/phase0/`, which stays as-is until we cut over).
+   Terraform for the real S3 media bucket, the CloudFront distribution with
+   two origins (S3 for `/media/*`, EC2 for everything else), Route 53 alias
+   record, ACM cert attach (already Issued in us-east-1). Per Session 8's
+   handoff, use OAC (Origin Access Control), not OAI. `terraform destroy`
+   must be clean.
+2. **`django-storages` runtime check.** `production.py` already declares
+   `storages.backends.s3boto3.S3Boto3Storage` as `STORAGES['default']`.
+   Once the bucket is up, verify a `Photo` upload through Django admin lands
+   in S3 and `Photo.image.url` returns a CloudFront URL. Local dev still
+   uses filesystem (`local.py` doesn't declare `STORAGES`).
+3. **`ManifestStaticFilesStorage` + S3 static.** Session 9 wired Manifest for
+   the staticfiles backend (still local disk in `production.py`). Two paths
+   for Session 10:
+   - **A. Static stays on EC2** behind nginx, media goes to S3+CloudFront.
+     Simpler; matches the handoff's default sketch.
+   - **B. Static also goes to S3+CloudFront** (`storages.backends.s3boto3.S3StaticStorage`),
+     with `ManifestFilesMixin` for hashing. More complex, avoids nginx serving
+     large `staticfiles/` (110+ files including engagement JPEGs).
+     Given the engagement JPEG total, B is probably right — decide up front.
+4. **Phase 0 teardown.** After the new module applies clean, `terraform
+   destroy` `infra/phase0/`. Update the phase0 README to note the module is
+   retired. Prevents the phase0 bucket + distribution from accruing charges
+   (small, but real).
+5. **DNS cutover.** Route 53 alias flips from phase0's CloudFront to the new
+   distribution. Instant TTL because it's an alias, but plan the order:
+   new distribution deployed and healthy → alias update → phase0 destroy.
+6. **Cost check** after apply. Verify aggregate spend still targets
+   <$5/month per the handoff's amendment.
+7. **Optional follow-ups** noted in Session 9's digressions:
+   - `keep_intermediate_files=False` on the storage backend if the doubled
+     `staticfiles/` size annoys us on S3.
+   - Wire `resize_engagement_photos` into a CI step so a re-drop doesn't
+     require manual invocation before deploy.
+
+Before touching anything in Session 10:
+
+- Read this file (Session 9), plus Session 8's Terraform / S3 handoff notes.
+- **Python:** `/Users/stevennielsen/aws-wedding-website/.venv/bin/python`.
+- **Frontend:** `pnpm` via corepack from `frontend/`.
+- **Runserver:** 8765. **Vite dev:** `http://localhost:5175/`, not `127.0.0.1`.
+- Every direct Terraform provider / module version gets exact-pinned per [[feedback-strict-version-pins]].
+- Tests are the penultimate step per the working contract.
+- Long-running `terraform apply` / `destroy` handed to the user per [[feedback-long-running-commands]].
 
 ## Open questions / follow-ups
 
