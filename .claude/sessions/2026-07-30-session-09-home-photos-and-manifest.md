@@ -89,7 +89,8 @@ Out of scope this session (deferred to Session 10+):
      full-bleed `<img>`. `loading="lazy"`. Preserve `.photo-break` structure
      for the aspect-ratio wrapper.
    - **Photos teaser** (line 141-146): replace the four `.img-slot--1-1` divs
-     with four teaser `<img>` elements. `loading="lazy"`,
+     with four teaser `<img>` elements in **3:4 vertical** (not 1:1 as the
+     original mock; the dropped photos are vertical). `loading="lazy"`,
      `sizes="(min-width: 900px) 22vw, 45vw"`.
 5. **CSS pass.** Add `.hero__img`, `.photo-break img`, `.story__image img`,
    `.photos-teaser__grid img` rules to `backend/static/css/site.css`:
