@@ -370,21 +370,13 @@ button { font: inherit; }
   );
   overflow: hidden;
 }
-.hero__label {
+.hero__img {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: clamp(1.25rem, 4vw, 3rem);
-  pointer-events: none;
-  z-index: 2;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  color: rgba(253, 251, 247, 0.8);
-  text-align: right;
-  line-height: 1.7;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
 }
 .hero__scrim {
   position: absolute;
@@ -490,6 +482,14 @@ button { font: inherit; }
 }
 .story__image { display: flex; justify-content: center; }
 .story__image .img-slot { width: 100%; max-width: 460px; }
+.story__img {
+  width: 100%;
+  max-width: 460px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 230px 230px var(--radius-md) var(--radius-md);
+  display: block;
+}
 
 /* Dark day section */
 .day {
@@ -591,21 +591,14 @@ button { font: inherit; }
 /* Photo break */
 .photo-break {
   height: clamp(280px, 38vw, 520px);
-  background: repeating-linear-gradient(
-    135deg,
-    var(--surface-border) 0 14px,
-    var(--surface-raised) 14px 28px
-  );
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 1.5rem;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  line-height: 1.7;
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+.photo-break__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* Travel */
@@ -664,6 +657,13 @@ button { font: inherit; }
     #E4DCCD 0 10px,
     var(--surface-border) 10px 20px
   );
+}
+.photos-teaser__img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+  border-radius: var(--radius-md);
 }
 
 /* RSVP band */
