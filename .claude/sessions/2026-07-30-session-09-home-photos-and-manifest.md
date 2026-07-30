@@ -201,9 +201,9 @@ crop). Four vertical tiles at 22vw each on desktop reads as a photo strip.
 - [x] `site.css` gains `.hero__img`, `.story__img`, `.photo-break__img`, `.photos-teaser__img` rules; `.hero__label` (design annotation placeholder) removed; `.photo-break` shed its striped background + text-content padding.
 - [x] `production.py` swapped `StaticFilesStorage` → `ManifestStaticFilesStorage`. `local.py` untouched (still serves unhashed).
 - [x] Manifest verified via scratch `collectstatic --settings=config.settings.production --clear --noinput`: 171 files copied + post-processed; `staticfiles.json` maps each engagement derivative + `main.js` + `site.css` + `nav-reveal.js` to a content-hashed filename. Scratch output cleaned.
-- [ ] Smoke test in browser — real photos render, no CLS, nav-reveal still fires, teaser tiles lazy-load. _(pending user visual confirmation on the running dev server)_
+- [x] Smoke test in browser — user confirmed real photos render correctly after the flex/grid `<img>` `min-width: auto` fix documented below. Nav-reveal + hero legibility + all four slots verified.
 - [x] Tests added in `backend/pages/tests.py` — 10 tests across 2 classes. Full suite: 31 pass (21 rsvp + 10 pages).
-- [ ] Session log finalized (this section) — pending browser smoke test.
+- [x] Session log finalized (this section).
 
 ### Digressions worth remembering
 
@@ -218,6 +218,10 @@ crop). Four vertical tiles at 22vw each on desktop reads as a photo strip.
 **`fetchpriority="high"` on hero** is a modern browser hint for the LCP element. Chrome/Edge/Safari support it; older browsers ignore it silently. Zero downside to include.
 
 **No dev-server hashing.** `local.py` doesn't declare `STORAGES`, so it inherits Django's default `StaticFilesStorage` (unhashed URLs). Dev matches prod for markup shape but not for URLs — a `{% static %}` returns `/static/img/engagement/derivatives/hero-1600.jpg` in dev and `/static/img/engagement/derivatives/hero-1600.<hash>.jpg` in prod. Not worth flipping Manifest on locally: `collectstatic` would need to run on every static-file change, which kills iteration.
+
+**Flex/grid `<img>` with intrinsic HTML dimensions needs `min-width: 0`.** First browser smoke test: the arch portrait + four teaser tiles rendered "insanely long and skinny" — object-fit cropping only the middle of the source. Root cause is a classic gotcha: `<img>` elements inside a flex parent (`.story__image`) or grid parent (`.photos-teaser__grid`) inherit `min-width: auto` in the inline axis, and for images the `auto` value resolves to the source's intrinsic pixel width. Our engagement JPEGs have `width="4672"` intrinsic attributes, which forced the flex/grid item to refuse to shrink below 4672px — the `aspect-ratio: 3/4` computation then produced a 4672 × 6229 element that got scrunched by the parent's inline-size cap into a skinny tall silhouette with `object-fit: cover` hiding everything but a vertical stripe. Fix: `min-width: 0` on both `.story__img` and `.photos-teaser__img` (also added `height: auto` for good measure). Two lines each. Locking as a rule: **any `<img>` sized via CSS `aspect-ratio` inside a flex or grid parent needs `min-width: 0`** — the intrinsic HTML width attribute we set for CLS prevention is exactly what triggers the bug. Also worth noting: this only surfaces when the source's intrinsic width is significantly larger than the layout column, which is our case with 4000-5000px+ sources.
+
+**Manifest-hashed dev is off, but stale browser CSS still bites in dev.** The above bug was compounded by the user's browser holding a cached copy of `site.css` from Session 8, so the first two edit passes didn't take effect until Cmd+Shift+R. Django's runserver serves static files without strong cache-control, so the browser's heuristic cache decides. Not worth wiring cache-busting in dev — just remember to hard-refresh after CSS changes when iterating.
 
 ## Files created / modified this session
 
@@ -234,7 +238,7 @@ crop). Four vertical tiles at 22vw each on desktop reads as a photo strip.
 **Modified:**
 - `backend/config/settings/production.py` — `STORAGES['staticfiles']['BACKEND']` → `ManifestStaticFilesStorage`
 - `backend/templates/home.html` — added `{% load engagement_photos %}`; replaced hero placeholder div with `<img class="hero__img">` (eager, fetchpriority high); replaced `.img-slot--3-4-arch` with `<img class="story__img">`; replaced `.photo-break` text content with `<img class="photo-break__img">`; replaced four `.img-slot--1-1` placeholders with four `<img class="photos-teaser__img">`; removed the "Four square tiles" annotation copy
-- `backend/static/css/site.css` — dropped `.hero__label` block; added `.hero__img`, `.story__img`, `.photo-break__img`, `.photos-teaser__img` rules; `.photo-break` shed its striped background + monospace label padding
+- `backend/static/css/site.css` — dropped `.hero__label` block; added `.hero__img`, `.story__img`, `.photo-break__img`, `.photos-teaser__img` rules; `.photo-break` shed its striped background + monospace label padding; `.story__img` and `.photos-teaser__img` include `min-width: 0` + `height: auto` to defuse the flex/grid `<img>` intrinsic-width bug documented under Digressions
 - `backend/pages/tests.py` — replaced the empty scaffold with `HomePageTests` (7 tests) + `ComingSoonPagesTests` (3 tests)
 
 **Also touched (not tracked by git):**
