@@ -1,0 +1,30 @@
+{
+  "hero": {
+    "width": 5680,
+    "height": 3787
+  },
+  "arch": {
+    "width": 4672,
+    "height": 6541
+  },
+  "break": {
+    "width": 4718,
+    "height": 3646
+  },
+  "teaser-1": {
+    "width": 4257,
+    "height": 5509
+  },
+  "teaser-2": {
+    "width": 4070,
+    "height": 6105
+  },
+  "teaser-3": {
+    "width": 4672,
+    "height": 6541
+  },
+  "teaser-4": {
+    "width": 4672,
+    "height": 6046
+  }
+}
