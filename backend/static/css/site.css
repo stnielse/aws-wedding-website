@@ -484,7 +484,9 @@ button { font: inherit; }
 .story__image .img-slot { width: 100%; max-width: 460px; }
 .story__img {
   width: 100%;
+  min-width: 0;
   max-width: 460px;
+  height: auto;
   aspect-ratio: 3 / 4;
   object-fit: cover;
   border-radius: 230px 230px var(--radius-md) var(--radius-md);
@@ -660,6 +662,8 @@ button { font: inherit; }
 }
 .photos-teaser__img {
   width: 100%;
+  min-width: 0;
+  height: auto;
   aspect-ratio: 3 / 4;
   object-fit: cover;
   display: block;
