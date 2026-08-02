@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and edit only if you want to override defaults.
+# All variables have sensible defaults for this project; nothing is
+# strictly required.
+#
+# terraform.tfvars is gitignored via the repo-root .gitignore.
+
+# Optional. Applied as the Project tag on every resource AND used as the
+# base for bucket names ("wedding-site-media-<accountid>", etc.). Defaults
+# to "wedding-site".
+# project_tag = "wedding-site"
