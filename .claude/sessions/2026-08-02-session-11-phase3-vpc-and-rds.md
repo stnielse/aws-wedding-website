@@ -214,7 +214,7 @@ Out of scope this session (deferred):
 - [x] `outputs.tf` extended with DB endpoint/address/port/name/user, VPC + subnet IDs, both SG IDs, log group name.
 - [x] `README.md` extended with Session 11 sections (RDS cost, apply flow, verification snippet).
 - [x] `terraform validate` + `fmt -diff` clean (no `init` needed — no new providers).
-- [ ] User runs `terraform plan -out=tfplan` + `apply` (RDS ~5-10 min).
+- [x] User ran `terraform plan -out=tfplan` + `apply`. First apply failed 3 of 18 resources due to ASCII-only description restriction on AWS SG + DB Subnet Group APIs (see Digressions). Second apply after the fix landed the remaining 7 resources. RDS endpoint: `wedding-site-postgres.cc70gwu6slkq.us-east-1.rds.amazonaws.com:5432`. `aws rds describe-db-instances` confirms: `available`, postgres 17.10, db.t3.micro, 20 GB gp3, encrypted, single-AZ, backup retention 7, deletion_protection off — all match spec.
 - [x] Session log finalized (this section).
 
 ### Digressions worth remembering
@@ -271,8 +271,38 @@ correctness against real AWS).
 **`terraform -chdir=` instead of `cd`.** For future infra sessions:
 `terraform -chdir=infra/phase3 validate` avoids polluting the current
 working directory, which matches CLAUDE.md's guidance to prefer absolute
-paths over `cd`. Didn't use this session (habit), but it's the right
-pattern.
+paths over `cd`. Switched to it mid-session after fixing the ASCII bug
+below; going forward this is the pattern.
+
+**AWS SG + DB Subnet Group descriptions must be pure ASCII.** First
+apply crashed on 3 of 18 resources — the two `aws_security_group`
+descriptions and the `aws_db_subnet_group` description — because they
+contained em-dashes (`—`) and a `≥`. HCL accepts UTF-8 fine, and Terraform's
+own `validate` didn't flag it; the failure only surfaces at API-call time.
+Other AWS resources this session (VPC, subnets, route tables, IGW, log
+group) accepted UTF-8 in tags/descriptions without complaint — this
+restriction is **per-API and undocumented in most guides**. Locked as a
+[[feedback-aws-ascii-only-descriptions]] memory: grep every `description = "..."`
+for non-ASCII before every apply. Fix took ~30 seconds; the lesson took
+one failed apply. Partial state after the first apply was clean —
+Terraform tracked which 11 resources succeeded and the second apply
+picked up only the 7 remaining.
+
+**RDS provisioning was ~4 min this session** — faster than the "5-10 min"
+estimate in the plan. Consistent with a db.t3.micro single-AZ with no
+Multi-AZ standby to spin up. Good baseline for Session 12+ where any
+`terraform destroy` + `apply` cycle can budget ~5 min for RDS churn.
+
+**Final Session 11 outputs (captured for Session 12's EC2 `.env`):**
+
+    db_address         = wedding-site-postgres.cc70gwu6slkq.us-east-1.rds.amazonaws.com
+    db_port            = 5432
+    db_name            = stnielse_wedding
+    db_master_username = stnielse_wedding_admin
+
+User's `terraform.tfvars` overrode the defaults to prefix `db_name` and
+`db_master_username` with `stnielse_` — an account-level naming
+convention. Session 12 uses these exact values verbatim.
 
 ## Files created / modified this session
 
