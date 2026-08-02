@@ -113,8 +113,8 @@ Out of scope this session (deferred):
 10. **Custom staticfiles storage class.** New
     `backend/config/storage_backends.py`:
     ```python
-    from storages.backends.s3 import S3StaticStorage
     from django.contrib.staticfiles.storage import ManifestFilesMixin
+    from storages.backends.s3 import S3StaticStorage
 
     class ManifestS3StaticStorage(ManifestFilesMixin, S3StaticStorage):
         pass
