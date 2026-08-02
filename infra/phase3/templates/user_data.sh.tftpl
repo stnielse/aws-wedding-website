@@ -1,23 +1,22 @@
 #!/bin/bash
 # First-boot bootstrap for the wedding-site EC2 instance.
 #
-# Runs once as root via cloud-init on instance launch. Idempotent-friendly
-# but assumes a fresh AL2023 image. Any failure (set -e) aborts and leaves
-# the machine reachable via SSM Session Manager for diagnosis. Full log at
-# /var/log/user-data.log.
+# Runs once as root via cloud-init on instance launch. Any failure (set -e)
+# aborts and leaves the machine reachable via SSM Session Manager for
+# diagnosis. Full log at /var/log/user-data.log.
 #
 # Rendered by Terraform templatefile() with:
-#   app_dir          — where the repo is cloned
+#   app_dir          — where the repo is cloned (/home/ec2-user/aws-wedding-website)
 #   repo_url         — public GitHub URL, no creds needed
 #   ssm_prefix       — /wedding-site/prod
 #   aws_region       — us-east-1
 #   gunicorn_service — the full systemd unit contents
 #   nginx_conf       — the full nginx server block
 #
-# Design: system-level bits (dnf install, systemd) run as root here.
+# Design: system-level bits (dnf, systemd, nginx config) run as root here.
 # App-tier bits (git clone, pip, pnpm, migrate, collectstatic) run via
-# runuser -u ec2-user against helper scripts staged to /tmp. That avoids
-# nested-heredoc quoting hazards and keeps file ownership sane.
+# runuser against a helper script staged to /tmp — that avoids nested-
+# heredoc quoting hazards and keeps file ownership sane.
 
 set -euxo pipefail
 exec > >(tee -a /var/log/user-data.log) 2>&1
@@ -42,6 +41,7 @@ dnf -y install \
     nodejs20 \
     npm \
     postgresql17 \
+    jq \
     tar \
     gzip
 
@@ -49,7 +49,8 @@ corepack enable
 corepack prepare pnpm@11.17.0 --activate
 
 # --------------------------------------------------------------------------
-# App bootstrap (as ec2-user via a staged helper script)
+# App bootstrap (as ec2-user via a staged helper script — env comes through
+# via the args passed on the command line, no env-var inheritance games).
 # --------------------------------------------------------------------------
 cat > /tmp/bootstrap-app.sh <<'BOOTSTRAP'
 #!/bin/bash
@@ -60,7 +61,7 @@ REPO_URL="$2"
 SSM_PREFIX="$3"
 AWS_REGION="$4"
 
-# Clone repo (skip if directory already exists).
+# Clone the public repo (skip if it already exists from a rerun).
 if [ ! -d "$APP_DIR" ]; then
     git clone "$REPO_URL" "$APP_DIR"
 fi
@@ -71,13 +72,14 @@ python3.12 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r backend/requirements/production.txt
 
-# Frontend build (writes to backend/static/frontend/).
+# Frontend build (writes into backend/static/frontend/).
 cd "$APP_DIR/frontend"
 pnpm install --frozen-lockfile
 pnpm build
 
 # Fetch every /wedding-site/prod/* SSM param into backend/.env.
-# One aws call, output as JSON, parsed by python for correct escaping.
+# jq's @sh filter emits single-quote-wrapped values with embedded quotes
+# properly escaped, which is exactly the shape `set -a; . .env` expects.
 ENV_FILE="$APP_DIR/backend/.env"
 umask 0077
 aws ssm get-parameters-by-path \
@@ -86,20 +88,13 @@ aws ssm get-parameters-by-path \
     --region "$AWS_REGION" \
     --recursive \
     --output json \
-  | python3.12 -c '
-import json, os, sys, shlex
-data = json.load(sys.stdin)
-prefix = os.environ["SSM_PREFIX"] + "/"
-with open(os.environ["ENV_FILE"], "w") as f:
-    for p in sorted(data["Parameters"], key=lambda x: x["Name"]):
-        key = p["Name"].removeprefix(prefix)
-        # shlex.quote wraps in single-quotes and escapes embedded quotes.
-        f.write(f"{key}={shlex.quote(p[\"Value\"])}\n")
-'
+  | jq -r --arg prefix "$SSM_PREFIX/" '
+        .Parameters | sort_by(.Name)[] |
+        "\(.Name | ltrimstr($prefix))=\(.Value | @sh)"
+    ' > "$ENV_FILE"
 chmod 0600 "$ENV_FILE"
-export SSM_PREFIX ENV_FILE  # Ensure the python subshell sees them.
 
-# migrate + collectstatic using the venv + .env.
+# migrate + collectstatic using the venv + the freshly-written .env.
 cd "$APP_DIR/backend"
 set -a
 . "$ENV_FILE"
@@ -109,12 +104,8 @@ set +a
 BOOTSTRAP
 chmod +x /tmp/bootstrap-app.sh
 
-# Pass SSM_PREFIX + ENV_FILE via env so the inline python one-liner picks
-# them up. Also export AWS_REGION for the aws cli calls.
-SSM_PREFIX="$SSM_PREFIX" \
-ENV_FILE="$APP_DIR/backend/.env" \
-    runuser -u ec2-user -- /tmp/bootstrap-app.sh \
-        "$APP_DIR" "$REPO_URL" "$SSM_PREFIX" "$AWS_REGION"
+runuser -u ec2-user -- /tmp/bootstrap-app.sh \
+    "$APP_DIR" "$REPO_URL" "$SSM_PREFIX" "$AWS_REGION"
 
 rm -f /tmp/bootstrap-app.sh
 
