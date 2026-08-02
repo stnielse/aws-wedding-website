@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.http import Http404, JsonResponse
 from django.middleware.csrf import get_token
@@ -12,6 +13,8 @@ from .models import MEAL_CHOICES, Party, RSVP
 
 REPLY_BY_DATE = '1 April 2027'
 VALID_MEAL_VALUES = {value for value, _ in MEAL_CHOICES}
+
+logger = logging.getLogger(__name__)
 
 
 def _party_by_code(code):
@@ -78,10 +81,18 @@ def submit(request, code):
     try:
         payload = json.loads(request.body.decode('utf-8'))
     except (ValueError, UnicodeDecodeError):
+        logger.warning(
+            'rsvp_submit_invalid',
+            extra={'party_code': party_obj.lookup_code, 'reason': 'malformed_json'},
+        )
         return JsonResponse({'ok': False, 'errors': [{'message': 'Malformed request.'}]}, status=400)
 
     entries = payload.get('guests')
     if not isinstance(entries, list) or not entries:
+        logger.warning(
+            'rsvp_submit_invalid',
+            extra={'party_code': party_obj.lookup_code, 'reason': 'empty_guests'},
+        )
         return JsonResponse({'ok': False, 'errors': [{'message': 'No guest responses submitted.'}]}, status=400)
 
     guests_by_id = {g.id: g for g in party_obj.guests.all()}
@@ -137,6 +148,14 @@ def submit(request, code):
         })
 
     if errors:
+        logger.warning(
+            'rsvp_submit_invalid',
+            extra={
+                'party_code': party_obj.lookup_code,
+                'reason': 'validation_errors',
+                'error_count': len(errors),
+            },
+        )
         return JsonResponse({'ok': False, 'errors': errors}, status=400)
 
     receipt = []
@@ -154,6 +173,15 @@ def submit(request, code):
         )
         receipt.append(_rsvp_to_dict(rsvp))
 
+    logger.info(
+        'rsvp_submitted',
+        extra={
+            'party_code': party_obj.lookup_code,
+            'guest_ids': [row['guest'].id for row in cleaned],
+            'attending_count': sum(1 for row in cleaned if row['attending']),
+            'total_count': len(cleaned),
+        },
+    )
     return JsonResponse({'ok': True, 'receipt': receipt})
 
 
