@@ -1,0 +1,26 @@
+[Unit]
+Description=gunicorn for wedding-site Django app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=${app_dir}/backend
+EnvironmentFile=${app_dir}/backend/.env
+RuntimeDirectory=gunicorn
+RuntimeDirectoryMode=0755
+ExecStart=${app_dir}/.venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/run/gunicorn/gunicorn.sock \
+    --access-logfile - \
+    --error-logfile - \
+    config.wsgi:application
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
