@@ -257,26 +257,235 @@ Out of scope this session (deferred):
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] `ssm.tf` written (random_password + SecureString + String params).
-- [ ] `ec2_iam.tf` written (role + inline policies + managed policy attachment + instance profile).
-- [ ] `security_groups.tf` extended with 80 + 443 ingress rules.
-- [ ] `ec2.tf` written (AMI SSM lookup + instance + EIP + association).
-- [ ] `templates/user_data.sh.tftpl` written.
-- [ ] `templates/gunicorn.service.tftpl` + `templates/nginx-site.conf.tftpl` written.
-- [ ] `outputs.tf` extended with EC2 outputs.
-- [ ] `production.py` — `ALLOWED_HOSTS` as env-list, with test.
-- [ ] `pyproject.toml` (ruff config) + `backend/requirements/local.txt` (ruff pinned).
-- [ ] Ruff clean on `backend/`.
-- [ ] `.github/workflows/ci.yml` written.
-- [ ] `terraform validate` + `fmt -diff` clean; non-ASCII grep clean.
-- [ ] Full test suite passes (target ≥45).
-- [ ] User runs `terraform plan -out=tfplan` + `apply` (~1 min compute + ~5-8 min user_data).
-- [ ] `curl http://<eip>/` returns 200 with the home page.
-- [ ] Session log finalized.
+- [x] `ssm.tf` written (random_password + 2 SecureString + 9 String params, all under `/wedding-site/prod/`).
+- [x] `variables.tf` extended with `domain_name` (required); `terraform.tfvars.example` updated.
+- [x] `main.tf` extended with `hashicorp/random 3.7.2` provider pin.
+- [x] `ec2_iam.tf` written (trust policy, S3 policy attach, SSM read policy with KMS decrypt condition, AmazonSSMManagedInstanceCore attach, instance profile).
+- [x] `security_groups.tf` extended with 80 + 443 ingress rules on ec2 SG (no SSH).
+- [x] `templates/user_data.sh.tftpl` written — uses jq for SSM→.env rendering; installs Python 3.12 + Node 20 + pnpm + nginx + git + jq; clones repo; pnpm build; migrate; collectstatic; writes systemd unit + nginx conf; starts services.
+- [x] `templates/gunicorn.service.tftpl` — `Type=simple` (not notify — no gunicorn[systemd] pin), 3 workers, unix socket, journal logs.
+- [x] `templates/nginx-site.conf.tftpl` — proxy_pass to gunicorn unix socket; no /static/ or /media/ handling (those come from S3 directly via django-storages).
+- [ ] **`ec2.tf` NOT YET WRITTEN** — AMI SSM data source + `aws_instance.web` + `aws_eip.web` + `aws_eip_association.web`. This is the biggest remaining chunk; see Pickup below.
+- [ ] `outputs.tf` NOT YET extended with EC2 outputs.
+- [ ] `production.py` NOT YET extended for `ALLOWED_HOSTS` env-list.
+- [ ] `pyproject.toml` NOT YET written; ruff NOT YET pinned in local.txt.
+- [ ] Ruff NOT YET run against backend/.
+- [ ] `.github/workflows/ci.yml` NOT YET written.
+- [ ] `terraform validate` + `fmt -diff` + non-ASCII grep NOT YET run.
+- [ ] Full test suite + new ALLOWED_HOSTS test NOT YET run.
+- [ ] User runs `terraform plan -out=tfplan` + `apply` — pending.
+- [ ] `curl http://<eip>/` verification — pending.
+- [ ] Session log finalized — pending.
 
 ### Digressions worth remembering
 
-*(Filled in during execution.)*
+**gunicorn systemd unit needs `Type=simple`, not `Type=notify`.** First
+draft of `templates/gunicorn.service.tftpl` used `Type=notify`, which
+requires `pip install gunicorn[systemd]` (the sd-notify extra). Our
+`requirements/production.txt` pins plain `gunicorn==26.0.0`, so systemd
+would hang waiting for a `READY=1` signal that never arrives. Fix: drop
+the `Type=notify` line (defaults to `Type=simple` — systemd considers
+the service started once the ExecStart process forks). If we ever want
+proper notify semantics, add `gunicorn[systemd]` to production.txt and
+switch back. `Type=simple` means nginx may briefly 502 if it starts
+before gunicorn binds the socket; user_data sleeps 2s before the
+sanity-check curl, and after that both services are steady-state.
+
+**Nested-heredoc quoting hazards in user_data.** First user_data draft
+used `sudo -u ec2-user -H bash <<EOSU ... EOSU` nested blocks with
+`\$var` escapes to defer shell expansion to the inner bash. Fragile.
+Rewrote to stage a helper script at `/tmp/bootstrap-app.sh` and invoke
+via `runuser -u ec2-user -- /tmp/bootstrap-app.sh "$APP_DIR" ...`. Args
+pass positionally, no escape gymnastics. Also switched .env rendering
+from `python3.12 -c '...'` (blocked by "can't nest single quotes in
+bash single-quoted string") to `jq -r '... | @sh'` which shell-quotes
+values correctly for `set -a; . .env` consumption. jq added to the dnf
+install list.
+
+**AL2023 stock nginx.conf has a default `server` block on port 80.**
+Would conflict with ours (both `default_server`). user_data comments
+the default block out with `sed -i.bak '/^\s*server\s*{/,/^\s*}/ s/^/# /'`.
+Not the cleanest — the sed regex assumes indentation matches AL2023's
+default; if AWS changes the stock config formatting, this breaks. If we
+see nginx failing to start with "duplicate default_server" after any
+AMI rebase, revisit.
+
+---
+
+## PICKUP FOR NEXT TERMINAL SESSION
+
+**Session limit hit mid-Session-12.** Next terminal should read this
+file top-to-bottom, then continue from here. Nothing has been applied
+to AWS this session — all local file writes only. Terraform state is
+still at Session 11 (18 resources).
+
+### What's already written and on disk
+
+Under `infra/phase3/`:
+- `main.tf` — provider pins including new `random 3.7.2`
+- `variables.tf` — `domain_name` added (required)
+- `terraform.tfvars.example` — `domain_name` placeholder added
+- `ssm.tf` — `random_password.django_secret_key` + 11 `aws_ssm_parameter` resources
+- `ec2_iam.tf` — role, 3 policies, instance profile
+- `security_groups.tf` — 80 + 443 ingress rules appended
+- `templates/user_data.sh.tftpl` — full bootstrap script
+- `templates/gunicorn.service.tftpl` — systemd unit
+- `templates/nginx-site.conf.tftpl` — reverse proxy config
+
+### Immediate next step — write `ec2.tf`
+
+```hcl
+data "aws_ssm_parameter" "al2023_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
+}
+
+resource "aws_eip" "web" {
+  domain = "vpc"
+  tags   = { Name = "${var.project_tag}-web-eip" }
+}
+
+resource "aws_instance" "web" {
+  ami                    = data.aws_ssm_parameter.al2023_ami.value
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.ec2.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
+
+  user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
+    app_dir          = "/home/ec2-user/aws-wedding-website"
+    repo_url         = "https://github.com/stnielse/aws-wedding-website.git"
+    ssm_prefix       = local.ssm_prefix
+    aws_region       = "us-east-1"
+    gunicorn_service = templatefile("${path.module}/templates/gunicorn.service.tftpl", {
+      app_dir = "/home/ec2-user/aws-wedding-website"
+    })
+    nginx_conf = file("${path.module}/templates/nginx-site.conf.tftpl")
+  })
+  user_data_replace_on_change = false
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"  # IMDSv2 required
+    http_put_response_hop_limit = 1
+  }
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+    encrypted   = true
+  }
+
+  tags = { Name = "${var.project_tag}-web" }
+
+  depends_on = [
+    aws_db_instance.wedding,  # RDS reachable before user_data runs migrate
+    aws_ssm_parameter.django_secret_key,
+    aws_ssm_parameter.db_password,
+    aws_ssm_parameter.db_host,
+    aws_ssm_parameter.db_port,
+    aws_ssm_parameter.db_name,
+    aws_ssm_parameter.db_user,
+    aws_ssm_parameter.domain,
+    aws_ssm_parameter.allowed_hosts,
+    aws_ssm_parameter.aws_region,
+    aws_ssm_parameter.aws_storage_bucket_name,
+    aws_ssm_parameter.aws_static_bucket_name,
+  ]
+}
+
+resource "aws_eip_association" "web" {
+  instance_id   = aws_instance.web.id
+  allocation_id = aws_eip.web.id
+}
+```
+
+**Watch out** — `aws_ssm_parameter.allowed_hosts` in `ssm.tf` references
+`aws_eip.web.public_ip`, creating a cycle with the `depends_on` above.
+Terraform resolves this: the EIP resource has no explicit dependency on
+the instance (association is a separate resource), so ssm→eip→instance
+is fine. But re-verify with `terraform plan` before apply.
+
+### Remaining task list (numeric IDs may have shifted; the work is what matters)
+
+1. **Write `infra/phase3/ec2.tf`** (see above).
+2. **Extend `infra/phase3/outputs.tf`** with `ec2_instance_id`,
+   `ec2_public_ip = aws_eip.web.public_ip`, `ec2_public_dns =
+   aws_instance.web.public_dns`, `ec2_iam_role_arn = aws_iam_role.ec2.arn`,
+   `ssm_parameter_prefix = local.ssm_prefix`.
+3. **Extend `backend/config/settings/production.py`** — parse
+   `ALLOWED_HOSTS` as comma-separated env var:
+   ```python
+   ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', os.environ['DOMAIN']).split(',') if h.strip()]
+   ```
+   Add a test in `backend/config/tests.py` under a new
+   `AllowedHostsParsingTests(SimpleTestCase)` that stubs the env var
+   and re-imports settings (or just tests the split logic directly).
+4. **Create `pyproject.toml` at repo root** with `[tool.ruff]`:
+   ```toml
+   [tool.ruff]
+   line-length = 100
+   target-version = "py312"
+   extend-exclude = ["backend/**/migrations/**"]
+
+   [tool.ruff.lint]
+   select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+   [tool.ruff.lint.per-file-ignores]
+   "backend/**/tests.py" = ["E501"]  # long assertion strings OK
+   ```
+5. **Pin ruff** in `backend/requirements/local.txt` — latest is `ruff==0.14.4`
+   (or check `pip index versions ruff` for current). Install:
+   `.venv/bin/pip install ruff==<version>`.
+6. **Run `ruff check backend/`** — fix any real issues. Expect a handful
+   of `I001` (import sorting) and maybe `UP` upgrades on older code.
+   Then `ruff format backend/` for whitespace normalization. Commit the
+   fixes as a distinct commit before continuing.
+7. **Write `.github/workflows/ci.yml`** — two parallel jobs:
+   - `python`: setup-python 3.12, `pip install -r backend/requirements/production.txt
+     -r backend/requirements/local.txt`, `ruff check backend/`,
+     `ruff format --check backend/`, `cd backend && python manage.py test`.
+   - `frontend`: setup-node 20, `corepack enable`, `cd frontend && pnpm install
+     --frozen-lockfile && pnpm lint && pnpm build`.
+   - `on: { push: {}, pull_request: {} }` — no branch filter.
+8. **`terraform -chdir=infra/phase3 validate`** + `fmt -diff` + non-ASCII
+   grep (`grep -RnP '[^\x00-\x7F]' *.tf` — verify no `description = "..."`
+   fields have em-dashes/etc. per the ASCII-only memory).
+9. **Run full test suite** — must pass, target ≥45 tests.
+10. **Hand `terraform plan -out=tfplan` + `apply` to the user.** Expect
+    ~20-25 new resources: 11 SSM params + IAM role/profile/policies (5-6) +
+    2 SG ingress rules + AMI data source + EIP + instance + EIP association.
+    Instance boots ~1 min; user_data ~5-8 min (dnf update + pnpm install
+    + collectstatic to S3 dominate). Terraform doesn't wait for user_data
+    to finish — the apply returns as soon as the instance is `running`.
+    User verifies via SSM Session Manager: `aws ssm start-session --target
+    <instance-id>`, then `tail -f /var/log/user-data.log` until `=== user_data done ===`.
+11. **Verify `curl -s -o /dev/null -w '%{http_code}\n' http://<eip>/`** returns
+    200 (or a Django-served 4xx — anything but 5xx / timeout means the stack
+    is up).
+12. **Finalize this log** — flip remaining `[ ]` to `[x]`, fill in real
+    EIP + instance ID in the digressions, capture any surprises.
+
+### If something breaks
+
+- **user_data failed silently** → SSM to the instance, `sudo cat /var/log/user-data.log`. `set -x` should show the exact line that failed.
+- **gunicorn won't start** → `sudo journalctl -u gunicorn -n 100`. Common causes: bad .env (missing var, unescaped char), venv path wrong, migrations pending.
+- **nginx won't start** → `sudo nginx -t` for config test. If duplicate default_server, the sed didn't neutralize the stock block — hand-edit `/etc/nginx/nginx.conf`.
+- **RDS unreachable from EC2** → confirm EC2 SG in the RDS SG's ingress (via `aws_vpc_security_group_ingress_rule.rds_from_ec2` from Session 11); test with `pg_isready -h <db_address> -p 5432` from the instance (postgresql17 client installed).
+- **SSM params can't be read by the instance** → check the IAM role's `ec2_ssm_read` policy is attached; test with `aws ssm get-parameter --name /wedding-site/prod/DB_HOST --with-decryption` from the instance.
+
+### Git state at pickup
+
+User commits incrementally throughout the session, not just at end. All
+Session 10 + 11 + in-progress Session 12 work will be committed before
+the next terminal picks up. Expect a **clean tree** (`git status` shows
+"nothing to commit, working tree clean") when Session 12 resumes.
+
+Recent commit log will show Session 10 + 11 in full, plus whatever
+partial Session 12 commits landed (SSM/IAM/SG/templates all done as of
+this write). Confirm with `git log --oneline -15` at pickup.
+
+Git write ops remain user-owned per [[feedback-git-operations]]; do NOT
+stage or commit anything on their behalf during pickup.
 
 ## Files created / modified this session
 
