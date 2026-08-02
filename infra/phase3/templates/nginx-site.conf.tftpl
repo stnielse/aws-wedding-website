@@ -1,0 +1,26 @@
+upstream gunicorn {
+    server unix:/run/gunicorn/gunicorn.sock;
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    client_max_body_size 25M;
+
+    # Static + media are on S3 (via django-storages), served directly from
+    # the bucket regional URL until Session 13 wires CloudFront. nginx
+    # doesn't need to serve /static/ or /media/ this session.
+
+    location / {
+        proxy_pass http://gunicorn;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_redirect                     off;
+        proxy_read_timeout                 60s;
+    }
+}
