@@ -106,11 +106,10 @@ Out of scope this session (deferred):
    fast (S3 buckets create in seconds; no CloudFront distribution to wait
    on). User captures the two bucket names into a scratch `.env` for the
    verification step below.
-9. **Pin `django-storages`.** Add `django-storages[s3]==X.Y.Z` to
-   `backend/requirements.txt` at the latest stable release compatible with
-   Django 5.2 LTS + boto3. Run `.venv/bin/pip install -r
-   backend/requirements.txt`. Verify `import storages` and
-   `import storages.backends.s3` work.
+9. **`django-storages` already pinned.** `backend/requirements/production.txt`
+   pins `django-storages==1.14.6` and `boto3==1.43.50` from Session 4.
+   Verified installed: `storages.backends.s3.S3StaticStorage` resolves,
+   `ManifestFilesMixin` importable. No pin change needed this session.
 10. **Custom staticfiles storage class.** New
     `backend/config/storage_backends.py`:
     ```python
