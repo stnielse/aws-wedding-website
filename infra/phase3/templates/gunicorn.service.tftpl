@@ -4,7 +4,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=notify
+# Type=simple (default) — systemd considers the service started as soon as
+# the ExecStart process is forked. Not Type=notify: that requires
+# gunicorn[systemd] (sd-notify), which our production.txt does not pin.
 User=ec2-user
 Group=ec2-user
 WorkingDirectory=${app_dir}/backend
