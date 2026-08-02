@@ -7,6 +7,10 @@
 # bucket names, VPC name, DB identifier, etc. Defaults to "wedding-site".
 # project_tag = "wedding-site"
 
+# REQUIRED. Apex domain (matches phase 0 tfvars). Used for ALLOWED_HOSTS +
+# DOMAIN SSM params in Session 12, and CloudFront aliases in Session 13.
+domain_name = "example.com"
+
 # RDS Postgres — DB name, master username, master password.
 # db_name             = "wedding"
 # db_master_username  = "wedding_admin"
