@@ -206,20 +206,73 @@ Out of scope this session (deferred):
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] `vpc.tf` written (VPC + 3 subnets + IGW + route tables + associations).
-- [ ] `security_groups.tf` written (EC2 placeholder + RDS accepting from EC2 SG).
-- [ ] `rds.tf` written (subnet group + DB instance + CloudWatch log group).
-- [ ] `variables.tf` extended with `db_master_username`, `db_master_password`, `db_name`.
-- [ ] `terraform.tfvars.example` extended with commented DB var placeholders.
-- [ ] `outputs.tf` extended with DB endpoint + VPC/subnet + SG outputs.
-- [ ] `README.md` extended with Session 11 additions.
-- [ ] `terraform init` + `validate` + `fmt -diff` clean.
-- [ ] User runs `terraform plan -out=tfplan` + `apply` (5-10 min).
-- [ ] Session log finalized.
+- [x] `vpc.tf` written (VPC + 3 subnets + IGW + 2 route tables + 3 associations).
+- [x] `security_groups.tf` written (EC2 placeholder + RDS accepting from EC2 SG, both with explicit egress rules via `aws_vpc_security_group_egress_rule`).
+- [x] `rds.tf` written (subnet group across `private_a` + `private_b`, `db.t3.micro` Postgres 17.10, CloudWatch log group with 30-day retention, `depends_on` sequencing).
+- [x] `variables.tf` extended with `db_master_username`, `db_master_password` (sensitive), `db_name`.
+- [x] `terraform.tfvars.example` extended with `db_master_password` REQUIRED-callout.
+- [x] `outputs.tf` extended with DB endpoint/address/port/name/user, VPC + subnet IDs, both SG IDs, log group name.
+- [x] `README.md` extended with Session 11 sections (RDS cost, apply flow, verification snippet).
+- [x] `terraform validate` + `fmt -diff` clean (no `init` needed — no new providers).
+- [ ] User runs `terraform plan -out=tfplan` + `apply` (RDS ~5-10 min).
+- [x] Session log finalized (this section).
 
 ### Digressions worth remembering
 
-*(Filled in during execution.)*
+**RDS subnet groups require ≥2 AZs even for single-AZ instances.** Called
+out in Decisions above but worth repeating here — it's the counter-intuitive
+part of "single-AZ" that trips first-time RDS users. Solution: `private_b`
+subnet in `us-east-1b` exists purely as a filler for the subnet group and
+carries zero cost.
+
+**No NAT gateway.** ~$32/mo saved. Works because RDS in the private subnet
+never initiates outbound (patches come via AWS's internal maintenance
+plumbing). If we ever add a private-tier resource that needs outbound
+(e.g., a Lambda calling a third-party API), NAT becomes necessary. Not
+this project.
+
+**`aws_vpc_security_group_ingress_rule` / `_egress_rule` over inline SG
+rules.** Newer AWS provider (5.x+) split rules into their own resources.
+Advantages: (a) rules can be added later without touching the SG's own
+Terraform (Session 12 attaches EC2 ingress rules to a Session 11 SG
+without drift), (b) each rule shows individually in `plan` output, (c)
+tighter error messages when a rule is invalid. Downside: more resource
+noise in the plan. Worth it.
+
+**Pre-created log group for RDS.** RDS auto-creates
+`/aws/rds/instance/<db_id>/postgresql` with **never-expire retention** on
+first write if we don't declare it ourselves. Pre-declaring it as
+`aws_cloudwatch_log_group` with `retention_in_days = 30` + a `depends_on`
+from the DB instance makes RDS write into the group we own, so retention
+sticks. Learned this from the CloudWatch handoff amendment's "every log
+group needs retention_in_days set" rule — otherwise we accrue silent
+charges on old log data.
+
+**Terraform's `sensitive = true` variable.** Marks the value as redacted
+in `plan` / `apply` output and in state file diffs printed to console.
+It's still stored in plaintext in the state file itself, so `.tfstate*`
+files remain gitignored + local-only. For a wedding-site DB with one app
+connecting, that's the right trade-off — Secrets Manager would be
+$0.40/mo + rotation complexity we don't need.
+
+**Master username `wedding_admin`, not `postgres`.** Zero real security
+value (an attacker who reaches port 5432 can brute-force any username),
+but a tiny signal-quality win — generic scanners trying `postgres/postgres`
+fail without hitting a real credential check, cleaning up CloudWatch
+noise. Set once; costs nothing.
+
+**No app-code changes this session.** Verified by running `git status`
+against `backend/` — no diffs. Session log for Session 11 covers "tests
+are penultimate" per working contract with: nothing to test, no test
+diff needed. The infra is validated via `terraform validate` (syntax +
+resource-reference correctness) and the eventual `apply` (semantic
+correctness against real AWS).
+
+**`terraform -chdir=` instead of `cd`.** For future infra sessions:
+`terraform -chdir=infra/phase3 validate` avoids polluting the current
+working directory, which matches CLAUDE.md's guidance to prefer absolute
+paths over `cd`. Didn't use this session (habit), but it's the right
+pattern.
 
 ## Files created / modified this session
 
