@@ -1,8 +1,13 @@
-"""Production settings — RDS Postgres, S3 media via CloudFront OAC, DEBUG off.
+"""Production settings — RDS Postgres, S3 media + static via CloudFront OAC, DEBUG off.
 
-Every secret comes from the environment (systemd `EnvironmentFile` on EC2).
-Reads with `os.environ[...]` (not `.get(...)`) so a missing variable fails
+Every secret comes from the environment (systemd ``EnvironmentFile`` on EC2).
+Reads with ``os.environ[...]`` (not ``.get(...)``) so a missing variable fails
 loudly at import time — safer than silently starting with a bad config.
+
+CloudFront custom domains are optional: if ``AWS_S3_CUSTOM_DOMAIN`` /
+``AWS_STATIC_CUSTOM_DOMAIN`` are unset, django-storages falls back to the
+bucket's regional S3 URL. That's the path used during Session 10 verification
+before the CloudFront distribution exists.
 """
 
 import os
@@ -27,20 +32,86 @@ DATABASES = {
     }
 }
 
-# Django 5.x `STORAGES` dict (replaces the old `DEFAULT_FILE_STORAGE` /
-# `STATICFILES_STORAGE` scalars). django-storages provides the S3 backend.
+
+# --------------------------------------------------------------------------
+# Storage backends
+# --------------------------------------------------------------------------
+# Two S3 buckets provisioned by ``infra/phase3``: one for MEDIA_URL uploads
+# (``AWS_STORAGE_BUCKET_NAME``), one for collectstatic output
+# (``AWS_STATIC_BUCKET_NAME``). Static gets ``ManifestS3StaticStorage`` so
+# ``collectstatic`` hashes filenames + uploads them in one step.
+
+_media_options = {
+    'bucket_name': os.environ['AWS_STORAGE_BUCKET_NAME'],
+    'region_name': os.environ['AWS_REGION'],
+    'default_acl': None,          # bucket is private; CloudFront OAC (Session 12+) handles access.
+    'querystring_auth': False,    # public URLs, no signature params.
+}
+if _media_domain := os.environ.get('AWS_S3_CUSTOM_DOMAIN'):
+    _media_options['custom_domain'] = _media_domain
+
+_static_options = {
+    'bucket_name': os.environ['AWS_STATIC_BUCKET_NAME'],
+    'region_name': os.environ['AWS_REGION'],
+    'default_acl': None,
+    'querystring_auth': False,
+}
+if _static_domain := os.environ.get('AWS_STATIC_CUSTOM_DOMAIN'):
+    _static_options['custom_domain'] = _static_domain
+
 STORAGES = {
     'default': {
-        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        'BACKEND': 'storages.backends.s3.S3Storage',
+        'OPTIONS': _media_options,
     },
     'staticfiles': {
-        'BACKEND': 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage',
+        'BACKEND': 'config.storage_backends.ManifestS3StaticStorage',
+        'OPTIONS': _static_options,
     },
 }
 
-AWS_STORAGE_BUCKET_NAME = os.environ['AWS_STORAGE_BUCKET_NAME']
-AWS_S3_REGION_NAME = os.environ['AWS_REGION']
-AWS_S3_CUSTOM_DOMAIN = os.environ['CLOUDFRONT_DOMAIN']
-AWS_DEFAULT_ACL = None  # bucket is private; CloudFront OAC handles access.
-
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+
+# --------------------------------------------------------------------------
+# Logging
+# --------------------------------------------------------------------------
+# All records go to stderr as JSON via config.log_formatters.JsonFormatter.
+# systemd's journald picks stderr up on EC2; the CloudWatch Agent (Session
+# 12+) tails journald and ships records to ``/wedding/django``. See handoff
+# amendment "Logging — AWS CloudWatch across the stack".
+#
+# ``django`` and ``django.request`` are declared explicitly to strip
+# ``mail_admins`` from Django's default handler set (we ship to CloudWatch,
+# not to email). Everything else — including ``rsvp``, ``gallery``,
+# ``pages`` — propagates up to the root logger.
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {'()': 'config.log_formatters.JsonFormatter'},
+    },
+    'handlers': {
+        'stderr': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+        },
+    },
+    'root': {'handlers': ['stderr'], 'level': 'INFO'},
+    'loggers': {
+        'django': {
+            'level': 'INFO',
+            'handlers': ['stderr'],
+            'propagate': False,
+        },
+        'django.request': {
+            # Django logs 4xx at WARNING and 5xx at ERROR under this logger;
+            # bumping the floor to WARNING skips the noisy request-completed
+            # DEBUG chatter we don't want in prod.
+            'level': 'WARNING',
+            'handlers': ['stderr'],
+            'propagate': False,
+        },
+    },
+}
