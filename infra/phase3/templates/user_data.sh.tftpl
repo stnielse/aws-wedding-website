@@ -1,18 +1,23 @@
 #!/bin/bash
 # First-boot bootstrap for the wedding-site EC2 instance.
 #
-# Runs once as root on instance launch (via cloud-init). Idempotent-friendly
-# but not idempotent: assumes a fresh AL2023 image. Failure of any step
-# aborts (set -e) and leaves the machine in a state SSM can log into for
-# diagnosis. Full log lands at /var/log/user-data.log.
+# Runs once as root via cloud-init on instance launch. Idempotent-friendly
+# but assumes a fresh AL2023 image. Any failure (set -e) aborts and leaves
+# the machine reachable via SSM Session Manager for diagnosis. Full log at
+# /var/log/user-data.log.
 #
 # Rendered by Terraform templatefile() with:
-#   app_dir      = /home/ec2-user/aws-wedding-website
-#   repo_url     = https://github.com/stnielse/aws-wedding-website.git
-#   ssm_prefix   = /wedding-site/prod
-#   aws_region   = us-east-1
-#   gunicorn_service = <systemd unit contents>
-#   nginx_conf       = <nginx conf contents>
+#   app_dir          — where the repo is cloned
+#   repo_url         — public GitHub URL, no creds needed
+#   ssm_prefix       — /wedding-site/prod
+#   aws_region       — us-east-1
+#   gunicorn_service — the full systemd unit contents
+#   nginx_conf       — the full nginx server block
+#
+# Design: system-level bits (dnf install, systemd) run as root here.
+# App-tier bits (git clone, pip, pnpm, migrate, collectstatic) run via
+# runuser -u ec2-user against helper scripts staged to /tmp. That avoids
+# nested-heredoc quoting hazards and keeps file ownership sane.
 
 set -euxo pipefail
 exec > >(tee -a /var/log/user-data.log) 2>&1
@@ -40,98 +45,97 @@ dnf -y install \
     tar \
     gzip
 
-# --------------------------------------------------------------------------
-# Enable pnpm via corepack (bundled with Node 20). --activate installs the
-# pinned version from frontend/package.json when we run pnpm inside frontend/.
-# --------------------------------------------------------------------------
 corepack enable
 corepack prepare pnpm@11.17.0 --activate
 
 # --------------------------------------------------------------------------
-# Repo clone + Python venv + deps (as ec2-user so file ownership is right)
+# App bootstrap (as ec2-user via a staged helper script)
 # --------------------------------------------------------------------------
-sudo -u ec2-user -H bash <<EOSU
+cat > /tmp/bootstrap-app.sh <<'BOOTSTRAP'
+#!/bin/bash
 set -euxo pipefail
 
+APP_DIR="$1"
+REPO_URL="$2"
+SSM_PREFIX="$3"
+AWS_REGION="$4"
+
+# Clone repo (skip if directory already exists).
 if [ ! -d "$APP_DIR" ]; then
     git clone "$REPO_URL" "$APP_DIR"
 fi
 
+# Python venv + backend deps.
 cd "$APP_DIR"
 python3.12 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r backend/requirements/production.txt
 
-# Frontend build (writes to backend/static/frontend/)
-cd frontend
+# Frontend build (writes to backend/static/frontend/).
+cd "$APP_DIR/frontend"
 pnpm install --frozen-lockfile
 pnpm build
-EOSU
 
-# --------------------------------------------------------------------------
-# Fetch SSM params → backend/.env
-# --------------------------------------------------------------------------
+# Fetch every /wedding-site/prod/* SSM param into backend/.env.
+# One aws call, output as JSON, parsed by python for correct escaping.
 ENV_FILE="$APP_DIR/backend/.env"
-umask 0077   # Owner-readable .env only.
-
-sudo -u ec2-user -H bash <<EOSU
-set -euxo pipefail
-
-# get-parameters-by-path returns pages; script assumes < 50 params (we have
-# ~11). If the count grows past a page, add --starting-token pagination.
+umask 0077
 aws ssm get-parameters-by-path \
     --path "$SSM_PREFIX/" \
     --with-decryption \
     --region "$AWS_REGION" \
     --recursive \
-    --query 'Parameters[].{Name:Name,Value:Value}' \
-    --output text | \
-while IFS=$'\t' read -r name value; do
-    # Name comes in as /wedding-site/prod/DJANGO_SECRET_KEY — strip the prefix.
-    key="\$(basename "\$name")"
-    # Escape any single-quotes in the value, wrap the whole thing.
-    escaped="\$(printf "%s" "\$value" | sed "s/'/'\\\\\\\\''/g")"
-    echo "\$key='\$escaped'"
-done > "$ENV_FILE"
-
+    --output json \
+  | python3.12 -c '
+import json, os, sys, shlex
+data = json.load(sys.stdin)
+prefix = os.environ["SSM_PREFIX"] + "/"
+with open(os.environ["ENV_FILE"], "w") as f:
+    for p in sorted(data["Parameters"], key=lambda x: x["Name"]):
+        key = p["Name"].removeprefix(prefix)
+        # shlex.quote wraps in single-quotes and escapes embedded quotes.
+        f.write(f"{key}={shlex.quote(p[\"Value\"])}\n")
+'
 chmod 0600 "$ENV_FILE"
-EOSU
+export SSM_PREFIX ENV_FILE  # Ensure the python subshell sees them.
 
-# --------------------------------------------------------------------------
-# Django: migrate + collectstatic (as ec2-user, using the venv + .env)
-# --------------------------------------------------------------------------
-sudo -u ec2-user -H bash <<EOSU
-set -euxo pipefail
+# migrate + collectstatic using the venv + .env.
 cd "$APP_DIR/backend"
-
-# Source the .env into the shell for the manage.py runs.
 set -a
-. .env
+. "$ENV_FILE"
 set +a
+"$APP_DIR/.venv/bin/python" manage.py migrate --settings=config.settings.production --noinput
+"$APP_DIR/.venv/bin/python" manage.py collectstatic --settings=config.settings.production --noinput
+BOOTSTRAP
+chmod +x /tmp/bootstrap-app.sh
 
-../.venv/bin/python manage.py migrate --settings=config.settings.production --noinput
-../.venv/bin/python manage.py collectstatic --settings=config.settings.production --noinput
-EOSU
+# Pass SSM_PREFIX + ENV_FILE via env so the inline python one-liner picks
+# them up. Also export AWS_REGION for the aws cli calls.
+SSM_PREFIX="$SSM_PREFIX" \
+ENV_FILE="$APP_DIR/backend/.env" \
+    runuser -u ec2-user -- /tmp/bootstrap-app.sh \
+        "$APP_DIR" "$REPO_URL" "$SSM_PREFIX" "$AWS_REGION"
+
+rm -f /tmp/bootstrap-app.sh
 
 # --------------------------------------------------------------------------
 # systemd unit for gunicorn
 # --------------------------------------------------------------------------
-cat > /etc/systemd/system/gunicorn.service <<'EOF'
+cat > /etc/systemd/system/gunicorn.service <<'GUNICORNEOF'
 ${gunicorn_service}
-EOF
+GUNICORNEOF
 
 # --------------------------------------------------------------------------
 # nginx server block
 # --------------------------------------------------------------------------
-cat > /etc/nginx/conf.d/wedding-site.conf <<'EOF'
+cat > /etc/nginx/conf.d/wedding-site.conf <<'NGINXEOF'
 ${nginx_conf}
-EOF
+NGINXEOF
 
-# AL2023's stock /etc/nginx/nginx.conf ships with a `server { listen 80
+# AL2023's stock /etc/nginx/nginx.conf includes a default `server { listen 80
 # default_server; ... }` block that conflicts with ours (both default_server
-# on the same port). Neutralize it by commenting out the server block —
-# ours takes over.
-sed -i.bak '/^\s*server\s*{/,/^\s*}/ s/^/#/' /etc/nginx/nginx.conf
+# on port 80). Neutralize by commenting the block out — ours takes over.
+sed -i.bak '/^\s*server\s*{/,/^\s*}/ s/^/# /' /etc/nginx/nginx.conf
 
 # --------------------------------------------------------------------------
 # Start services. systemd creates /run/gunicorn via RuntimeDirectory.
@@ -141,9 +145,7 @@ systemctl enable --now gunicorn
 systemctl enable --now nginx
 
 # --------------------------------------------------------------------------
-# Post-flight sanity: nginx and gunicorn should be active; localhost should
-# return an HTTP status (any 2xx/3xx/4xx is fine — 5xx means gunicorn
-# didn't come up cleanly).
+# Post-flight sanity
 # --------------------------------------------------------------------------
 systemctl is-active gunicorn
 systemctl is-active nginx
