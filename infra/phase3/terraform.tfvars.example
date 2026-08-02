@@ -1,10 +1,16 @@
-# Copy to terraform.tfvars and edit only if you want to override defaults.
-# All variables have sensible defaults for this project; nothing is
-# strictly required.
+# Copy to terraform.tfvars and set db_master_password. Everything else has
+# a sensible default; nothing else is strictly required.
 #
 # terraform.tfvars is gitignored via the repo-root .gitignore.
 
-# Optional. Applied as the Project tag on every resource AND used as the
-# base for bucket names ("wedding-site-media-<accountid>", etc.). Defaults
-# to "wedding-site".
+# Applied as the Project tag on every resource AND used as the base for
+# bucket names, VPC name, DB identifier, etc. Defaults to "wedding-site".
 # project_tag = "wedding-site"
+
+# RDS Postgres — DB name, master username, master password.
+# db_name             = "wedding"
+# db_master_username  = "wedding_admin"
+
+# REQUIRED. RDS master password. Minimum 8 chars per RDS; pick something
+# long. Sensitive — Terraform marks the value redacted in plan output.
+db_master_password = "REPLACE-ME-WITH-A-LONG-RANDOM-PASSWORD"
