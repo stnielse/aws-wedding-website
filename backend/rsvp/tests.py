@@ -241,6 +241,71 @@ class SubmitTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
 
+class SubmitLoggingTests(TestCase):
+    """Session 10 — asserts the surgical logger calls in views.submit fire."""
+
+    def setUp(self):
+        self.party = Party.objects.create(name='Alvarez–Okafor', lookup_code='FALLS-3K7')
+        self.marguerite = Guest.objects.create(
+            party=self.party, name='Marguerite Alvarez', plus_one_allowed=False
+        )
+        self.client = Client(enforce_csrf_checks=True)
+        get = self.client.get(reverse('rsvp:party', kwargs={'code': 'FALLS-3K7'}))
+        self.csrf_token = get.cookies['csrftoken'].value
+        self.submit_url = reverse('rsvp:submit', kwargs={'code': 'FALLS-3K7'})
+
+    def _decline_payload(self):
+        return {
+            'guests': [
+                {
+                    'guest_id': self.marguerite.id,
+                    'attending': False,
+                    'meal_choice': '',
+                    'plus_one_attending': False,
+                    'plus_one_name': '',
+                    'plus_one_meal': '',
+                    'notes': '',
+                }
+            ]
+        }
+
+    def test_successful_submit_emits_info_log(self):
+        with self.assertLogs('rsvp.views', level='INFO') as ctx:
+            response = _post_json(self.client, self.submit_url, self._decline_payload(), self.csrf_token)
+        self.assertEqual(response.status_code, 200)
+        submit_records = [r for r in ctx.records if r.getMessage() == 'rsvp_submitted']
+        self.assertEqual(len(submit_records), 1)
+        record = submit_records[0]
+        self.assertEqual(record.party_code, 'FALLS-3K7')
+        self.assertEqual(record.guest_ids, [self.marguerite.id])
+        self.assertEqual(record.total_count, 1)
+        self.assertEqual(record.attending_count, 0)
+
+    def test_malformed_json_emits_warning(self):
+        with self.assertLogs('rsvp.views', level='WARNING') as ctx:
+            response = self.client.post(
+                self.submit_url,
+                data='not-json',
+                content_type='application/json',
+                HTTP_X_CSRFTOKEN=self.csrf_token,
+            )
+        self.assertEqual(response.status_code, 400)
+        matching = [r for r in ctx.records if r.getMessage() == 'rsvp_submit_invalid']
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].reason, 'malformed_json')
+
+    def test_validation_error_emits_warning(self):
+        payload = self._decline_payload()
+        payload['guests'][0]['attending'] = True  # attending but no meal_choice → validation error
+        with self.assertLogs('rsvp.views', level='WARNING') as ctx:
+            response = _post_json(self.client, self.submit_url, payload, self.csrf_token)
+        self.assertEqual(response.status_code, 400)
+        matching = [r for r in ctx.records if r.getMessage() == 'rsvp_submit_invalid']
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].reason, 'validation_errors')
+        self.assertGreaterEqual(matching[0].error_count, 1)
+
+
 class ModelTests(TestCase):
     def test_party_uppercases_lookup_code_on_save(self):
         party = Party.objects.create(name='Test', lookup_code='falls-3k7')
