@@ -274,20 +274,21 @@ Out of scope this session (deferred):
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] `infra/phase3/` scaffolded (`main.tf`, `variables.tf`, `terraform.tfvars.example`, `README.md`).
-- [ ] S3 media bucket terraform written (`s3_media.tf`).
-- [ ] S3 static bucket terraform written (`s3_static.tf`).
-- [ ] IAM policy document written (`iam.tf`).
-- [ ] Outputs declared (`outputs.tf`).
-- [ ] `terraform init` + `plan` + `apply` (user-run).
+- [x] `infra/phase3/` scaffolded (`main.tf`, `variables.tf`, `terraform.tfvars.example`, `README.md`).
+- [x] S3 media bucket terraform written (`s3_media.tf`).
+- [x] S3 static bucket terraform written (`s3_static.tf`).
+- [x] IAM policy document written (`iam.tf`).
+- [x] Outputs declared (`outputs.tf`).
+- [x] `terraform init` (no backend) + `terraform validate` + `terraform fmt -diff` all clean.
+- [ ] `terraform plan -out=tfplan` + `terraform apply "tfplan"` (user-run, pending).
 - [x] `django-storages==1.14.6` + `boto3==1.43.50` already pinned in `backend/requirements/production.txt` (Session 4); import paths verified this session.
-- [ ] `config/storage_backends.py` created with `ManifestS3StaticStorage`.
-- [ ] `production.py` STORAGES updated; new `AWS_STATIC_*` env vars.
-- [ ] LOGGING dict + `config/log_formatters.py` landed in `production.py`.
-- [ ] Surgical logger calls in `rsvp/views.py`, `gallery/models.py`, exception paths.
-- [ ] Local verification against real S3 buckets (collectstatic + Photo upload).
-- [ ] Smoke test — local dev under `local.py` unchanged.
-- [ ] Tests added; full suite passes (target ≥34).
+- [x] `config/storage_backends.py` created with `ManifestS3StaticStorage`.
+- [x] `production.py` STORAGES updated (per-storage OPTIONS, media + static buckets); new `AWS_STATIC_*` env vars added.
+- [x] LOGGING dict + `config/log_formatters.py` landed in `production.py`; smoke-tested via `logging.config.dictConfig`.
+- [x] Surgical logger calls in `rsvp/views.py` (submit success + 3 failure paths) and `gallery/signals.py` (post_save on Photo). `pages/views.py` skipped — no 500-worthy branches.
+- [ ] Local verification against real S3 buckets (collectstatic + Photo upload) — pending after `terraform apply`.
+- [x] Smoke test — `local` settings still import cleanly; `production` settings import with scratch env vars; JSON formatter emits expected shape.
+- [x] Tests added (13 new: 5 JsonFormatter + 2 ManifestS3StaticStorage + 3 gallery signal + 3 RSVP logging). Full suite: 44 pass.
 - [ ] Session log finalized.
 
 ### Digressions worth remembering
