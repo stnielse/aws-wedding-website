@@ -4,6 +4,11 @@ variable "project_tag" {
   default     = "wedding-site"
 }
 
+variable "domain_name" {
+  type        = string
+  description = "Apex domain (same value used in phase 0's tfvars). Baked into ALLOWED_HOSTS + DOMAIN SSM params. Session 13's CloudFront also aliases apex + www."
+}
+
 variable "db_name" {
   type        = string
   description = "Initial database created inside the RDS Postgres instance. Django's DB_NAME env var points here."
