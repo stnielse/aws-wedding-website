@@ -280,7 +280,7 @@ Out of scope this session (deferred):
 - [ ] IAM policy document written (`iam.tf`).
 - [ ] Outputs declared (`outputs.tf`).
 - [ ] `terraform init` + `plan` + `apply` (user-run).
-- [ ] `django-storages[s3]` pinned in `backend/requirements.txt` and installed into venv.
+- [x] `django-storages==1.14.6` + `boto3==1.43.50` already pinned in `backend/requirements/production.txt` (Session 4); import paths verified this session.
 - [ ] `config/storage_backends.py` created with `ManifestS3StaticStorage`.
 - [ ] `production.py` STORAGES updated; new `AWS_STATIC_*` env vars.
 - [ ] LOGGING dict + `config/log_formatters.py` landed in `production.py`.
@@ -307,7 +307,6 @@ Out of scope this session (deferred):
 - `backend/config/tests_storage.py`, `backend/config/tests_logging.py` — new tests
 
 **Modified:**
-- `backend/requirements.txt` — `django-storages[s3]` pinned
 - `backend/config/settings/production.py` — STORAGES per-backend OPTIONS, LOGGING dict, new AWS_STATIC_* env vars
 - `backend/rsvp/views.py` — `logger` + submit success/failure log calls
 - `backend/gallery/models.py` — `logger` + photo upload log call
