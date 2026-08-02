@@ -33,6 +33,28 @@ resource "aws_vpc_security_group_egress_rule" "ec2_all_out" {
 }
 
 # --------------------------------------------------------------------------
+# EC2 ingress (Session 12) — 80/443 open to the internet. No SSH; SSM
+# Session Manager covers shell access without opening port 22.
+# --------------------------------------------------------------------------
+resource "aws_vpc_security_group_ingress_rule" "ec2_http" {
+  security_group_id = aws_security_group.ec2.id
+  description       = "HTTP from anywhere (Session 12 EIP hit path; Session 13 replaces with CloudFront origin traffic)."
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ec2_https" {
+  security_group_id = aws_security_group.ec2.id
+  description       = "HTTPS from anywhere (Session 13+ once CloudFront fronts and terminates TLS; nginx will forward to gunicorn)."
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+# --------------------------------------------------------------------------
 # RDS security group
 # --------------------------------------------------------------------------
 resource "aws_security_group" "rds" {
