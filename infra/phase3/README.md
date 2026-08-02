@@ -36,7 +36,7 @@ cd infra/phase3
 cp terraform.tfvars.example terraform.tfvars   # optional; defaults are fine
 
 terraform init
-terraform plan -out=tfplan   # expect ~9 resources
+terraform plan -out=tfplan   # expect 8 resources: 2 buckets + 2 PABs + 2 ownership-controls + 1 versioning + 1 lifecycle
 terraform apply "tfplan"
 rm tfplan
 ```
