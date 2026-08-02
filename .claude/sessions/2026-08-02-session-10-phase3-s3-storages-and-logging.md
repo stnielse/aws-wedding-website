@@ -280,20 +280,86 @@ Out of scope this session (deferred):
 - [x] IAM policy document written (`iam.tf`).
 - [x] Outputs declared (`outputs.tf`).
 - [x] `terraform init` (no backend) + `terraform validate` + `terraform fmt -diff` all clean.
-- [ ] `terraform plan -out=tfplan` + `terraform apply "tfplan"` (user-run, pending).
+- [x] `terraform plan -out=tfplan` + `terraform apply "tfplan"` (user-run) — 8 resources created: `wedding-site-media-633321546572` + `wedding-site-static-633321546572` + 2 PABs + 2 ownership-controls + versioning + lifecycle.
 - [x] `django-storages==1.14.6` + `boto3==1.43.50` already pinned in `backend/requirements/production.txt` (Session 4); import paths verified this session.
 - [x] `config/storage_backends.py` created with `ManifestS3StaticStorage`.
 - [x] `production.py` STORAGES updated (per-storage OPTIONS, media + static buckets); new `AWS_STATIC_*` env vars added.
 - [x] LOGGING dict + `config/log_formatters.py` landed in `production.py`; smoke-tested via `logging.config.dictConfig`.
 - [x] Surgical logger calls in `rsvp/views.py` (submit success + 3 failure paths) and `gallery/signals.py` (post_save on Photo). `pages/views.py` skipped — no 500-worthy branches.
-- [ ] Local verification against real S3 buckets (collectstatic + Photo upload) — pending after `terraform apply`.
+- [x] Local verification against real S3: scratch-write proof (one 25-byte ContentFile each to media + static via the actual `S3Storage` + `ManifestS3StaticStorage` classes) succeeded; direct S3 access returned 403 (PAB working); both buckets cleaned back to empty. Full collectstatic-to-S3 pipeline was also incidentally proven via an interrupted attempt that uploaded ~500 files with correct content-addressed filenames (`select2.9f54e6414f87.css` etc.) before being killed.
 - [x] Smoke test — `local` settings still import cleanly; `production` settings import with scratch env vars; JSON formatter emits expected shape.
 - [x] Tests added (13 new: 5 JsonFormatter + 2 ManifestS3StaticStorage + 3 gallery signal + 3 RSVP logging). Full suite: 44 pass.
-- [ ] Session log finalized.
+- [x] Session log finalized (this section).
 
 ### Digressions worth remembering
 
-*(Filled in during execution.)*
+**boto3's SSO login credential provider needs `awscrt`.** First attempt at
+`collectstatic` blew up with `botocore.exceptions.MissingDependencyException:
+Using the login credential provider requires an additional dependency. You
+will need to pip install "botocore[crt]" before proceeding.` The user auths
+locally via `aws sso login` (no `~/.aws/config` file, no permanent
+credentials), and recent botocore versions defer the OIDC token cache to
+`awscrt` — installed as an extra. Terraform's AWS provider is written in Go
+and doesn't have this problem, which is why `terraform apply` worked but
+Python's boto3 didn't. Fix: `.venv/bin/pip install awscrt` — one command,
+no requirements-file change because EC2 in prod will use an IAM instance
+role, not SSO. Locking this here so Session 11+ (and any future dev-machine
+setup) knows to install `awscrt` before the first Django-to-S3 call.
+
+**`collectstatic --clear` crashes on S3.** `--clear` walks `STATIC_ROOT`
+starting with `storage.exists('')`, which for `S3Storage` translates to
+`HeadObject` with an empty `Key`, which S3 rejects with
+`ParamValidationError: Invalid length for parameter Key, value: 0`. Not
+fatal because `--clear` isn't necessary on S3 — hashed filenames make old
+files harmless, and the static bucket's 30-day lifecycle (deferred to a
+follow-up) can garbage-collect them. Two possible fixes for Session 12+
+if we ever want `--clear` semantics on S3: (a) override the storage
+class's `exists()` to short-circuit `name == ''`; (b) write a management
+command that lists+deletes via boto3 directly. Skip for now — the
+existence of duplicate hashed files across deploys is a rounding error on
+S3 spend.
+
+**Full `collectstatic` from a laptop is minutes.** The engagement JPEG
+derivatives (28 files, tens of MB total) drive serial S3 PUTs across a
+home network. The interrupted second attempt uploaded a substantial chunk
+(~500 files, based on the delete output) before the kill. Session 12+
+must run `collectstatic` from CI (GitHub Actions on Anthropic's / AWS's
+backbone), not from a laptop — assume 30-90s from CI, minutes from home.
+Add `s3transfer` multipart config later if we want to speed up the JPEG
+uploads specifically.
+
+**Scratch-write proof pattern.** The one-line
+`default_storage.save('gallery/test.txt', ContentFile(b'...'))` (and same
+for `storages['staticfiles']`) is enough to verify the full Django ↔ S3
+write path in seconds, with two 25-byte files. Faster than `collectstatic`
+and doesn't churn the bucket. Adopt this as the standard "does the storage
+class work" check going forward, reserving full collectstatic for real
+deploys.
+
+**`ManifestFilesMixin.url()` needs a real manifest.** Calling
+`storages['staticfiles'].url('foo.txt')` on the direct-save file raised
+`ValueError: Missing staticfiles manifest entry`. That's *correct*
+behavior — the mixin looks up hashed names from `staticfiles.json`, and
+skipping `collectstatic` means there's no manifest. Not a bug; proof that
+the mixin is active. Direct-save + `url()` is a nonsense sequence in
+production (nobody saves to staticfiles at runtime); the intended flow is
+`collectstatic` writes the manifest, then `{% static %}` template tags
+look up hashed names via `url()`.
+
+**Bucket names include the AWS account ID.**
+`${project_tag}-media-${account_id}` (633321546572 in this case) rather
+than raw `${project_tag}-media`. S3 bucket names are globally unique; the
+account-ID suffix guarantees uniqueness without a random suffix that would
+change on `terraform destroy` + reapply. Downside: bucket name reveals
+the account ID to anyone who guesses the URL, but that's low-severity
+(account IDs aren't secrets, they're just identifiers).
+
+**Test count went from 31 to 44.** 13 new tests: 5 `JsonFormatter` shape
+assertions, 2 `ManifestS3StaticStorage` MRO/interface, 3 `gallery.signals`
+handler unit tests (via direct function call, bypassing ImageField +
+MEDIA_ROOT fixtures), 3 `rsvp.views` `assertLogs` coverage on submit
+success + malformed JSON + validation errors. All-Django `SimpleTestCase`
+where possible — no DB fixtures for the pure-plumbing tests.
 
 ## Files created / modified this session
 
