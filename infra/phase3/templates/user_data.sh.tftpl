@@ -1,0 +1,153 @@
+#!/bin/bash
+# First-boot bootstrap for the wedding-site EC2 instance.
+#
+# Runs once as root on instance launch (via cloud-init). Idempotent-friendly
+# but not idempotent: assumes a fresh AL2023 image. Failure of any step
+# aborts (set -e) and leaves the machine in a state SSM can log into for
+# diagnosis. Full log lands at /var/log/user-data.log.
+#
+# Rendered by Terraform templatefile() with:
+#   app_dir      = /home/ec2-user/aws-wedding-website
+#   repo_url     = https://github.com/stnielse/aws-wedding-website.git
+#   ssm_prefix   = /wedding-site/prod
+#   aws_region   = us-east-1
+#   gunicorn_service = <systemd unit contents>
+#   nginx_conf       = <nginx conf contents>
+
+set -euxo pipefail
+exec > >(tee -a /var/log/user-data.log) 2>&1
+
+APP_DIR="${app_dir}"
+REPO_URL="${repo_url}"
+SSM_PREFIX="${ssm_prefix}"
+AWS_REGION="${aws_region}"
+
+echo "=== user_data begin ($(date -Is)) ==="
+
+# --------------------------------------------------------------------------
+# System packages
+# --------------------------------------------------------------------------
+dnf -y update
+dnf -y install \
+    python3.12 \
+    python3.12-devel \
+    python3.12-pip \
+    nginx \
+    git \
+    nodejs20 \
+    npm \
+    postgresql17 \
+    tar \
+    gzip
+
+# --------------------------------------------------------------------------
+# Enable pnpm via corepack (bundled with Node 20). --activate installs the
+# pinned version from frontend/package.json when we run pnpm inside frontend/.
+# --------------------------------------------------------------------------
+corepack enable
+corepack prepare pnpm@11.17.0 --activate
+
+# --------------------------------------------------------------------------
+# Repo clone + Python venv + deps (as ec2-user so file ownership is right)
+# --------------------------------------------------------------------------
+sudo -u ec2-user -H bash <<EOSU
+set -euxo pipefail
+
+if [ ! -d "$APP_DIR" ]; then
+    git clone "$REPO_URL" "$APP_DIR"
+fi
+
+cd "$APP_DIR"
+python3.12 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -r backend/requirements/production.txt
+
+# Frontend build (writes to backend/static/frontend/)
+cd frontend
+pnpm install --frozen-lockfile
+pnpm build
+EOSU
+
+# --------------------------------------------------------------------------
+# Fetch SSM params → backend/.env
+# --------------------------------------------------------------------------
+ENV_FILE="$APP_DIR/backend/.env"
+umask 0077   # Owner-readable .env only.
+
+sudo -u ec2-user -H bash <<EOSU
+set -euxo pipefail
+
+# get-parameters-by-path returns pages; script assumes < 50 params (we have
+# ~11). If the count grows past a page, add --starting-token pagination.
+aws ssm get-parameters-by-path \
+    --path "$SSM_PREFIX/" \
+    --with-decryption \
+    --region "$AWS_REGION" \
+    --recursive \
+    --query 'Parameters[].{Name:Name,Value:Value}' \
+    --output text | \
+while IFS=$'\t' read -r name value; do
+    # Name comes in as /wedding-site/prod/DJANGO_SECRET_KEY — strip the prefix.
+    key="\$(basename "\$name")"
+    # Escape any single-quotes in the value, wrap the whole thing.
+    escaped="\$(printf "%s" "\$value" | sed "s/'/'\\\\\\\\''/g")"
+    echo "\$key='\$escaped'"
+done > "$ENV_FILE"
+
+chmod 0600 "$ENV_FILE"
+EOSU
+
+# --------------------------------------------------------------------------
+# Django: migrate + collectstatic (as ec2-user, using the venv + .env)
+# --------------------------------------------------------------------------
+sudo -u ec2-user -H bash <<EOSU
+set -euxo pipefail
+cd "$APP_DIR/backend"
+
+# Source the .env into the shell for the manage.py runs.
+set -a
+. .env
+set +a
+
+../.venv/bin/python manage.py migrate --settings=config.settings.production --noinput
+../.venv/bin/python manage.py collectstatic --settings=config.settings.production --noinput
+EOSU
+
+# --------------------------------------------------------------------------
+# systemd unit for gunicorn
+# --------------------------------------------------------------------------
+cat > /etc/systemd/system/gunicorn.service <<'EOF'
+${gunicorn_service}
+EOF
+
+# --------------------------------------------------------------------------
+# nginx server block
+# --------------------------------------------------------------------------
+cat > /etc/nginx/conf.d/wedding-site.conf <<'EOF'
+${nginx_conf}
+EOF
+
+# AL2023's stock /etc/nginx/nginx.conf ships with a `server { listen 80
+# default_server; ... }` block that conflicts with ours (both default_server
+# on the same port). Neutralize it by commenting out the server block —
+# ours takes over.
+sed -i.bak '/^\s*server\s*{/,/^\s*}/ s/^/#/' /etc/nginx/nginx.conf
+
+# --------------------------------------------------------------------------
+# Start services. systemd creates /run/gunicorn via RuntimeDirectory.
+# --------------------------------------------------------------------------
+systemctl daemon-reload
+systemctl enable --now gunicorn
+systemctl enable --now nginx
+
+# --------------------------------------------------------------------------
+# Post-flight sanity: nginx and gunicorn should be active; localhost should
+# return an HTTP status (any 2xx/3xx/4xx is fine — 5xx means gunicorn
+# didn't come up cleanly).
+# --------------------------------------------------------------------------
+systemctl is-active gunicorn
+systemctl is-active nginx
+sleep 2
+curl -sI -o /dev/null -w "localhost: %{http_code}\n" http://localhost/ || true
+
+echo "=== user_data done ($(date -Is)) ==="
