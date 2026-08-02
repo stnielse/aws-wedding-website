@@ -6,7 +6,7 @@
 
 resource "aws_db_subnet_group" "private" {
   name        = "${var.project_tag}-private"
-  description = "RDS private subnets (needs ≥2 AZs even for single-AZ)."
+  description = "RDS private subnets (needs 2+ AZs even for single-AZ)."
   subnet_ids  = [aws_subnet.private_a.id, aws_subnet.private_b.id]
 
   tags = {

@@ -17,7 +17,7 @@
 # --------------------------------------------------------------------------
 resource "aws_security_group" "ec2" {
   name        = "${var.project_tag}-ec2"
-  description = "EC2 app tier — ingress rules attached in Session 12."
+  description = "EC2 app tier - ingress rules attached in Session 12."
   vpc_id      = aws_vpc.main.id
 
   tags = {
@@ -37,7 +37,7 @@ resource "aws_vpc_security_group_egress_rule" "ec2_all_out" {
 # --------------------------------------------------------------------------
 resource "aws_security_group" "rds" {
   name        = "${var.project_tag}-rds"
-  description = "RDS Postgres — accepts 5432 from EC2 SG only."
+  description = "RDS Postgres - accepts 5432 from EC2 SG only."
   vpc_id      = aws_vpc.main.id
 
   tags = {
