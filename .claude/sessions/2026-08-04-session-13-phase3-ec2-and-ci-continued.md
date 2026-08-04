@@ -97,22 +97,101 @@ decisions or refinements below.)*
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] `infra/phase3/ec2.tf` written.
-- [ ] `infra/phase3/outputs.tf` extended with EC2 outputs.
-- [ ] `backend/config/settings/production.py` — ALLOWED_HOSTS env-list parsing.
-- [ ] `backend/config/tests.py` — new ALLOWED_HOSTS test.
-- [ ] `pyproject.toml` at repo root written; ruff pinned in `backend/requirements/local.txt`.
-- [ ] `ruff check backend/` + `ruff format backend/` — clean.
-- [ ] `.github/workflows/ci.yml` written.
-- [ ] `terraform validate` + `fmt -diff` + non-ASCII grep — clean.
-- [ ] Full Django test suite passes (≥45 tests).
-- [ ] User runs `terraform plan -out=tfplan` + `apply` — pending.
-- [ ] `curl http://<eip>/` verification — pending.
-- [ ] Session log finalized — pending.
+- [x] `infra/phase3/ec2.tf` written.
+- [x] `infra/phase3/outputs.tf` extended with EC2 outputs.
+- [x] `backend/config/settings/production.py` — ALLOWED_HOSTS env-list parsing.
+- [x] `backend/config/tests.py` — 3 new ALLOWED_HOSTS tests.
+- [x] `pyproject.toml` at repo root written; ruff==0.16.1 pinned in `backend/requirements/local.txt`.
+- [x] `ruff check backend/` + `ruff format backend/` — clean. Auto-fix landed I001, UP017, SIM105, F401; hand-fixed 5 E501 line-too-long + 1 E741 (`l` → `label`).
+- [x] `.github/workflows/ci.yml` written.
+- [x] `terraform validate` + `fmt -diff` + non-ASCII grep — clean. (Non-ASCII grep hit outputs.tf:61 in a Terraform *output* description, not an AWS resource; safe.)
+- [x] Full Django test suite passes — 47 tests, ok.
+- [x] User ran `terraform apply -replace=aws_instance.web` — succeeded on the 4th attempt after three digressions (see below).
+- [x] `curl http://<eip>/` verification — all three ALLOWED_HOSTS values return 200. Actual page (title: `Kaitlyn & Steven · 23 May 2027 · Louland Falls`) rendered from RDS-backed Django + S3-served static.
+- [x] Session log finalized.
+
+**End state:** `http://32.199.50.156/` serves the site. Instance
+`i-0e86a4994844691a4` in `us-east-1a`, launched
+2026-08-04T14:47:41Z (final replace). Terraform state at 40 resources
+(Session 11's 18 + Session 12/13's 22).
 
 ### Digressions worth remembering
 
-*(Filled during execution.)*
+Four failures during the apply/replace loop. Each landed as a fix in
+the Session 12 templates and taught us something about the AL2023
+runtime.
+
+**1. `corepack: command not found` on AL2023 node20.**
+Session 12 assumed `corepack enable` would work on `nodejs20`.
+AL2023's `nodejs20` package does not ship a `/usr/bin/corepack` shim.
+Fix: `npm install -g pnpm@11.17.0` instead — same result, no
+corepack dependency.
+
+**2. `nodejs20` was actually wrong — needed `nodejs22`.**
+Session 12's "Node 20 + pnpm 11.17.0 (matches local)" decision was
+based on an unverified assumption. `frontend/package.json` pins
+`pnpm@11.17.0`, and pnpm 11 requires Node ≥22.13. User's local Node
+is 22.23.1. Bumped user_data to `dnf install nodejs22` + pinned
+`alternatives --set node /usr/bin/node-22`. Also removed the bare
+`npm` package from the dnf install list because it resolves to
+`nodejs-npm` (npm for node 18) which drags node 18 in as a dep — and
+was masking which node version was actually on `$PATH`.
+
+**3. nginx failed because the sed hack from Session 12 couldn't
+handle nested `location{}` blocks.** The regex range
+`/^\s*server\s*{/,/^\s*}/` stops at the first `}` at start-of-line,
+which is usually a nested location block's closer — leaving the
+outer server block's `}` uncommented and the file syntactically
+invalid. Fix: overwrite `/etc/nginx/nginx.conf` wholesale with a
+minimal main config (`templates/nginx-main.conf.tftpl`) that has no
+inline server block, only `include /etc/nginx/conf.d/*.conf`. Our
+`wedding-site.conf` provides the only server block. Immune to
+future AL2023 formatting drift.
+
+**4. gunicorn socket permission preemptive fix.** After the sed fix
+would have landed nginx, the unix socket at `/run/gunicorn/gunicorn.sock`
+would have been unreachable by the `nginx` user (default umask →
+socket 0755, nginx-user can't write). Added `--umask 007` to
+gunicorn args and `usermod -aG ec2-user nginx` in user_data. Bonus:
+group creation avoids a 502 that would have cost another apply
+cycle.
+
+**5. systemd `EnvironmentFile=` leaves single quotes literal.**
+`.env` is generated with jq's `@sh` filter (bash-safe single quotes)
+because user_data's own `set -a; . .env; set +a` needs bash quoting
+semantics — and DJANGO_SECRET_KEY may contain `$` chars that would
+be shell-expanded under double quotes. But AL2023's systemd 252
+doesn't strip single quotes from `EnvironmentFile` values, so
+`ALLOWED_HOSTS='ip,domain,www.domain'` split on comma inside Django
+became `["'ip", "domain", "www.domain'"]`. Middle host worked;
+outer two returned `DisallowedHost` 400.
+
+Fix: drop `EnvironmentFile=` from the gunicorn systemd unit.
+Instead, user_data creates a wrapper at
+`$APP_DIR/scripts/run-gunicorn.sh` that bash-sources `.env` (correct
+quote handling), then `exec`s gunicorn. Systemd's ExecStart points
+at the wrapper. `.env` stays `@sh`-formatted so both user_data's
+own sourcing and the wrapper's sourcing use consistent bash
+semantics.
+
+**6. `%{http_code}` in user_data curl format string collided with
+Terraform template directives.** `templatefile()` treats `%{...}` as
+a control keyword. Escape as `%%{http_code}` so the rendered script
+gets the single `%{http_code}`. (Caught by `terraform validate`
+before apply — no runtime impact.)
+
+**7. `git clone` in user_data pulls GitHub's `main`, not local
+unpushed changes.** Iterated locally on `production.py`'s
+ALLOWED_HOSTS parsing but the deployed instance was cloning from
+`main` which still had the pre-Session-13 `[os.environ['DOMAIN']]`
+version. Django resolved ALLOWED_HOSTS to just `['kaitlynandsteventietheknot.com']`,
+which is why *only* the apex host returned 200 even though systemd
+had all three in env. Not a code bug — a workflow gotcha. When
+iterating on Python code, must push before `apply -replace` for
+the change to be visible on the box. This is intentional (the
+alternative would be to rsync from laptop, breaking reproducibility)
+and Session 15's `deploy.yml` will make the code-shipping step
+explicit rather than piggybacking on `git clone`.
 
 ---
 
@@ -121,14 +200,21 @@ decisions or refinements below.)*
 **Created:**
 - `.claude/sessions/2026-08-04-session-13-phase3-ec2-and-ci-continued.md` — this log
 - `infra/phase3/ec2.tf`
+- `infra/phase3/templates/nginx-main.conf.tftpl` (new; digression 3)
 - `pyproject.toml` — ruff config
 - `.github/workflows/ci.yml`
 
 **Modified:**
 - `infra/phase3/outputs.tf` — EC2 outputs
-- `backend/config/settings/production.py` — ALLOWED_HOSTS env-list
-- `backend/config/tests.py` — ALLOWED_HOSTS test
-- `backend/requirements/local.txt` — pin ruff
+- `infra/phase3/main.tf` — none (already had random provider pin from Session 12)
+- `infra/phase3/templates/user_data.sh.tftpl` — digressions 1, 2, 3, 4, 5, 6 (node 22, no npm, wrapper script, nginx main config, umask/group, %% escape)
+- `infra/phase3/templates/gunicorn.service.tftpl` — digression 5 (drop EnvironmentFile, ExecStart wrapper)
+- `infra/phase3/ec2.tf` — pass `nginx_main` template var
+- `backend/config/settings/production.py` — ALLOWED_HOSTS env-list (digression 7)
+- `backend/config/tests.py` — 3 ALLOWED_HOSTS tests
+- `backend/requirements/local.txt` — pin ruff==0.16.1
+- Autoformat pass touched 12 files under `backend/` (ruff format).
+- `infra/phase3/.terraform.lock.hcl` — random 3.7.2 added by `terraform init` during validate
 
 Per working contract, all `git add` / `git commit` is left to the user.
 
