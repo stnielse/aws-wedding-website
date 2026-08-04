@@ -19,7 +19,15 @@ SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 
 DEBUG = False
 
-ALLOWED_HOSTS = [os.environ['DOMAIN']]
+# ALLOWED_HOSTS: comma-separated env var so the EIP, apex domain, and any
+# other public hostnames can all coexist without redeploying settings.
+# Falls back to [DOMAIN] when unset -- covers the local run case where
+# only DOMAIN is populated.
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', os.environ['DOMAIN']).split(',')
+    if host.strip()
+]
 
 DATABASES = {
     'default': {
