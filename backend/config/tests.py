@@ -1,7 +1,12 @@
-"""Tests for the storage + logging plumbing added in Session 10."""
+"""Tests for the storage + logging plumbing added in Session 10 and the
+ALLOWED_HOSTS parsing added in Session 13."""
 
+import importlib
 import json
 import logging
+import os
+import sys
+from unittest import mock
 
 from django.test import SimpleTestCase
 
@@ -87,3 +92,49 @@ class JsonFormatterTests(SimpleTestCase):
 
         payload = self._format(self._make_record(thing=Weird()))
         self.assertEqual(payload['thing'], 'weird-repr')
+
+
+class AllowedHostsParsingTests(SimpleTestCase):
+    """production.settings parses ALLOWED_HOSTS as a comma-separated env var
+    (Session 13). Falls back to [DOMAIN] when ALLOWED_HOSTS is unset."""
+
+    # Minimum env every reimport of production.settings needs; ALLOWED_HOSTS
+    # is set/omitted per-test to exercise the parsing branch.
+    _base_env = {
+        'DJANGO_SECRET_KEY': 'test-secret-key-not-used-outside-tests',
+        'DOMAIN': 'example.com',
+        'DB_NAME': 'wedding',
+        'DB_USER': 'wedding_admin',
+        'DB_PASSWORD': 'test-pw',
+        'DB_HOST': 'db.example.com',
+        'DB_PORT': '5432',
+        'AWS_STORAGE_BUCKET_NAME': 'media-bucket',
+        'AWS_STATIC_BUCKET_NAME': 'static-bucket',
+        'AWS_REGION': 'us-east-1',
+    }
+
+    def _reimport_production(self):
+        sys.modules.pop('config.settings.production', None)
+        return importlib.import_module('config.settings.production')
+
+    def test_defaults_to_domain_when_allowed_hosts_unset(self):
+        env = dict(self._base_env)
+        env.pop('ALLOWED_HOSTS', None)
+        with mock.patch.dict(os.environ, env, clear=True):
+            module = self._reimport_production()
+        self.assertEqual(module.ALLOWED_HOSTS, ['example.com'])
+
+    def test_splits_comma_separated_values(self):
+        env = {**self._base_env, 'ALLOWED_HOSTS': '203.0.113.7,example.com,www.example.com'}
+        with mock.patch.dict(os.environ, env, clear=True):
+            module = self._reimport_production()
+        self.assertEqual(
+            module.ALLOWED_HOSTS,
+            ['203.0.113.7', 'example.com', 'www.example.com'],
+        )
+
+    def test_strips_whitespace_and_drops_empty_entries(self):
+        env = {**self._base_env, 'ALLOWED_HOSTS': ' a.example.com , ,b.example.com,'}
+        with mock.patch.dict(os.environ, env, clear=True):
+            module = self._reimport_production()
+        self.assertEqual(module.ALLOWED_HOSTS, ['a.example.com', 'b.example.com'])
