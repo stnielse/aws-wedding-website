@@ -1,0 +1,25 @@
+# Ruff config lives at repo root (not backend/) so ruff auto-discovers it
+# no matter where invoked from -- both `ruff check backend/` and
+# `ruff check .` pick up the same rules. There is no Python package at
+# this level; this file is config-only.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["backend/**/migrations/**"]
+
+[tool.ruff.lint]
+# E, F, W -- baseline pyflakes + pycodestyle.
+# I         -- isort (import ordering).
+# UP        -- pyupgrade (modern syntax).
+# B         -- bugbear (likely-bug patterns).
+# SIM       -- simplifications.
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests carry long assertion strings and occasionally intentional-unused
+# fixture imports; format them but do not gate CI on line length.
+"backend/**/tests.py" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "single"
