@@ -1,0 +1,85 @@
+# Continuous integration for the wedding-site repo.
+#
+# Two parallel jobs. `python` runs ruff + Django's test runner against
+# the local settings module. `frontend` runs oxlint (aliased to
+# `pnpm lint` in frontend/package.json) and a full production build to
+# catch any Vite/rollup-time regressions.
+#
+# Deploy is a separate workflow (Session 15) — this one does not touch
+# AWS credentials, does not gate merges (branch protection lands in
+# Session 14), and cancels in-progress runs on the same ref so pushes
+# don't queue up behind superseded commits.
+#
+# Actions pinned to exact release tags per [[feedback-strict-version-pins]].
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: python
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements/base.txt
+            backend/requirements/production.txt
+            backend/requirements/local.txt
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            -r backend/requirements/production.txt \
+            -r backend/requirements/local.txt
+
+      - name: Ruff check
+        run: ruff check backend/
+
+      - name: Ruff format check
+        run: ruff format --check backend/
+
+      - name: Django tests
+        working-directory: backend
+        run: python manage.py test --verbosity=2
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4.1.0
+        with:
+          node-version: '20'
+
+      - name: Enable corepack (pnpm 11.17.0 pinned in package.json)
+        run: corepack enable
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm build
