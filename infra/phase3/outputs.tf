@@ -99,3 +99,32 @@ output "rds_log_group_name" {
   value       = aws_cloudwatch_log_group.rds_postgresql.name
   description = "CloudWatch log group receiving RDS's postgresql log stream."
 }
+
+# --------------------------------------------------------------------------
+# EC2 + SSM (Session 12/13)
+# --------------------------------------------------------------------------
+
+output "ec2_instance_id" {
+  value       = aws_instance.web.id
+  description = "EC2 instance ID for the web tier (use with 'aws ssm start-session --target')."
+}
+
+output "ec2_public_ip" {
+  value       = aws_eip.web.public_ip
+  description = "Elastic IP fronting the web tier. Session 14 CloudFront uses this as an origin, and the DNS cutover keeps this IP stable across instance replaces."
+}
+
+output "ec2_public_dns" {
+  value       = aws_instance.web.public_dns
+  description = "AWS-assigned public DNS for the instance (ec2-<eip>.compute-1.amazonaws.com). EIP association may leave this null on first plan-then-apply; the EIP itself is the stable handle."
+}
+
+output "ec2_iam_role_arn" {
+  value       = aws_iam_role.ec2.arn
+  description = "ARN of the EC2 instance role (attaches S3 + SSM read + SSM Session Manager policies)."
+}
+
+output "ssm_parameter_prefix" {
+  value       = local.ssm_prefix
+  description = "SSM Parameter Store prefix (all wedding-site prod env vars live under this path)."
+}
