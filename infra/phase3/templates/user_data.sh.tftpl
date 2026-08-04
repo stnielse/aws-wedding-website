@@ -141,6 +141,6 @@ systemctl enable --now nginx
 systemctl is-active gunicorn
 systemctl is-active nginx
 sleep 2
-curl -sI -o /dev/null -w "localhost: %{http_code}\n" http://localhost/ || true
+curl -sI -o /dev/null -w "localhost: %%{http_code}\n" http://localhost/ || true
 
 echo "=== user_data done ($(date -Is)) ==="
