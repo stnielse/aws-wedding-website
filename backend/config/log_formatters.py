@@ -21,23 +21,41 @@ import datetime as _dt
 import json
 import logging
 
-
 # Attributes present on every ``LogRecord`` — anything else on the record's
 # ``__dict__`` came from ``extra=`` and should surface in the JSON output.
 _LOGRECORD_ATTRS = {
-    'args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename',
-    'funcName', 'levelname', 'levelno', 'lineno', 'message', 'module',
-    'msecs', 'msg', 'name', 'pathname', 'process', 'processName',
-    'relativeCreated', 'stack_info', 'taskName', 'thread', 'threadName',
+    'args',
+    'asctime',
+    'created',
+    'exc_info',
+    'exc_text',
+    'filename',
+    'funcName',
+    'levelname',
+    'levelno',
+    'lineno',
+    'message',
+    'module',
+    'msecs',
+    'msg',
+    'name',
+    'pathname',
+    'process',
+    'processName',
+    'relativeCreated',
+    'stack_info',
+    'taskName',
+    'thread',
+    'threadName',
 }
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         payload = {
-            'timestamp': _dt.datetime.fromtimestamp(record.created, tz=_dt.timezone.utc)
-                .isoformat(timespec='milliseconds')
-                .replace('+00:00', 'Z'),
+            'timestamp': _dt.datetime.fromtimestamp(record.created, tz=_dt.UTC)
+            .isoformat(timespec='milliseconds')
+            .replace('+00:00', 'Z'),
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),

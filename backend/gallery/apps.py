@@ -7,4 +7,3 @@ class GalleryConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401
-

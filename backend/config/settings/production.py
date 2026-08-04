@@ -52,8 +52,8 @@ DATABASES = {
 _media_options = {
     'bucket_name': os.environ['AWS_STORAGE_BUCKET_NAME'],
     'region_name': os.environ['AWS_REGION'],
-    'default_acl': None,          # bucket is private; CloudFront OAC (Session 12+) handles access.
-    'querystring_auth': False,    # public URLs, no signature params.
+    'default_acl': None,  # bucket is private; CloudFront OAC (Session 12+) handles access.
+    'querystring_auth': False,  # public URLs, no signature params.
 }
 if _media_domain := os.environ.get('AWS_S3_CUSTOM_DOMAIN'):
     _media_options['custom_domain'] = _media_domain

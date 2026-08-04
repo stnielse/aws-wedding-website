@@ -31,7 +31,14 @@ _dimensions_cache: dict | None = None
 def _load_dimensions() -> dict:
     global _dimensions_cache
     if _dimensions_cache is None:
-        path = Path(settings.BASE_DIR) / 'static' / 'img' / 'engagement' / 'derivatives' / 'dimensions.json'
+        path = (
+            Path(settings.BASE_DIR)
+            / 'static'
+            / 'img'
+            / 'engagement'
+            / 'derivatives'
+            / 'dimensions.json'
+        )
         _dimensions_cache = json.loads(path.read_text())
     return _dimensions_cache
 
@@ -41,8 +48,7 @@ def engagement_photo(slot: str) -> dict:
     dims = _load_dimensions()
     if slot not in dims:
         raise template.TemplateSyntaxError(
-            f"engagement_photo: unknown slot {slot!r} "
-            f"(known: {sorted(dims)})"
+            f'engagement_photo: unknown slot {slot!r} (known: {sorted(dims)})'
         )
 
     def variant_url(width: int) -> str:

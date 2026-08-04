@@ -45,8 +45,7 @@ class Command(BaseCommand):
             source = _resolve_source(src_dir, stem)
             if source is None:
                 raise CommandError(
-                    f"missing source for slot '{stem}' — expected "
-                    f"{src_dir}/{stem}.{{jpg,jpeg,png}}"
+                    f"missing source for slot '{stem}' — expected {src_dir}/{stem}.{{jpg,jpeg,png}}"
                 )
 
             with Image.open(source) as im:
@@ -79,10 +78,12 @@ class Command(BaseCommand):
         dims_path = out_dir / 'dimensions.json'
         dims_path.write_text(json.dumps(dimensions, indent=2) + '\n')
 
-        self.stdout.write(self.style.SUCCESS(
-            f'done — {generated} generated, {skipped} skipped, '
-            f'{len(SOURCE_STEMS)} sources tracked in {dims_path.name}'
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'done — {generated} generated, {skipped} skipped, '
+                f'{len(SOURCE_STEMS)} sources tracked in {dims_path.name}'
+            )
+        )
 
 
 def _resolve_source(src_dir: Path, stem: str) -> Path | None:

@@ -1,6 +1,5 @@
 from django.db import models
 
-
 MEAL_CHOICES = [
     ('short_rib', 'Braised short rib'),
     ('trout', 'Trout, almondine'),

@@ -48,8 +48,12 @@ class LandingTests(TestCase):
 class PartyPageTests(TestCase):
     def setUp(self):
         self.party = Party.objects.create(name='Alvarez–Okafor', lookup_code='FALLS-3K7')
-        self.marguerite = Guest.objects.create(party=self.party, name='Marguerite Alvarez', plus_one_allowed=True)
-        self.daniel = Guest.objects.create(party=self.party, name='Daniel Okafor', plus_one_allowed=False)
+        self.marguerite = Guest.objects.create(
+            party=self.party, name='Marguerite Alvarez', plus_one_allowed=True
+        )
+        self.daniel = Guest.objects.create(
+            party=self.party, name='Daniel Okafor', plus_one_allowed=False
+        )
 
     def test_get_valid_code_renders_party_page(self):
         response = self.client.get(reverse('rsvp:party', kwargs={'code': 'FALLS-3K7'}))
@@ -78,7 +82,9 @@ class PartyPageTests(TestCase):
         self.assertEqual(data['party']['lookupCode'], 'FALLS-3K7')
         self.assertEqual(len(data['guests']), 2)
         self.assertEqual(data['existingRsvps'], [])
-        self.assertEqual([m['value'] for m in data['mealChoices']], ['short_rib', 'trout', 'farrotto'])
+        self.assertEqual(
+            [m['value'] for m in data['mealChoices']], ['short_rib', 'trout', 'farrotto']
+        )
 
     def test_party_page_populates_existing_rsvps_when_present(self):
         RSVP.objects.create(guest=self.marguerite, attending=True, meal_choice='trout')
@@ -89,15 +95,21 @@ class PartyPageTests(TestCase):
         end = raw.index('</script>', start)
         data = json.loads(raw[start:end])
         self.assertEqual(len(data['existingRsvps']), 2)
-        marguerite_rsvp = next(r for r in data['existingRsvps'] if r['guest_id'] == self.marguerite.id)
+        marguerite_rsvp = next(
+            r for r in data['existingRsvps'] if r['guest_id'] == self.marguerite.id
+        )
         self.assertEqual(marguerite_rsvp['meal_choice_label'], 'Trout, almondine')
 
 
 class SubmitTests(TestCase):
     def setUp(self):
         self.party = Party.objects.create(name='Alvarez–Okafor', lookup_code='FALLS-3K7')
-        self.marguerite = Guest.objects.create(party=self.party, name='Marguerite Alvarez', plus_one_allowed=True)
-        self.daniel = Guest.objects.create(party=self.party, name='Daniel Okafor', plus_one_allowed=False)
+        self.marguerite = Guest.objects.create(
+            party=self.party, name='Marguerite Alvarez', plus_one_allowed=True
+        )
+        self.daniel = Guest.objects.create(
+            party=self.party, name='Daniel Okafor', plus_one_allowed=False
+        )
         # Enforce CSRF checks — the submit endpoint is only reachable via POST
         # with a valid token, and we want the tests to cover that path.
         self.client = Client(enforce_csrf_checks=True)
@@ -165,10 +177,12 @@ class SubmitTests(TestCase):
         self.assertEqual(response.status_code, 400)
         body = response.json()
         self.assertFalse(body['ok'])
-        self.assertTrue(any(
-            e.get('field') == 'meal_choice' and e.get('guest_id') == self.marguerite.id
-            for e in body['errors']
-        ))
+        self.assertTrue(
+            any(
+                e.get('field') == 'meal_choice' and e.get('guest_id') == self.marguerite.id
+                for e in body['errors']
+            )
+        )
         self.assertEqual(RSVP.objects.count(), 0)
 
     def test_declined_guest_does_not_need_meal(self):
@@ -271,7 +285,9 @@ class SubmitLoggingTests(TestCase):
 
     def test_successful_submit_emits_info_log(self):
         with self.assertLogs('rsvp.views', level='INFO') as ctx:
-            response = _post_json(self.client, self.submit_url, self._decline_payload(), self.csrf_token)
+            response = _post_json(
+                self.client, self.submit_url, self._decline_payload(), self.csrf_token
+            )
         self.assertEqual(response.status_code, 200)
         submit_records = [r for r in ctx.records if r.getMessage() == 'rsvp_submitted']
         self.assertEqual(len(submit_records), 1)

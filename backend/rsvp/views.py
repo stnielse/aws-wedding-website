@@ -8,8 +8,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
-from .models import MEAL_CHOICES, Party, RSVP
-
+from .models import MEAL_CHOICES, RSVP, Party
 
 REPLY_BY_DATE = '1 April 2027'
 VALID_MEAL_VALUES = {value for value, _ in MEAL_CHOICES}
@@ -32,7 +31,10 @@ def landing(request):
         else:
             party = _party_by_code(code)
             if party is None:
-                error = "We can't find that code. Double-check the invitation, or email us and we'll look you up."
+                error = (
+                    "We can't find that code. Double-check the invitation, "
+                    "or email us and we'll look you up."
+                )
             else:
                 return redirect('rsvp:party', code=party.lookup_code)
     return render(request, 'rsvp_landing.html', {'error': error, 'reply_by': REPLY_BY_DATE})
@@ -63,13 +65,15 @@ def party(request, code):
             }
             for g in guests
         ],
-        'existingRsvps': [
-            _rsvp_to_dict(existing[gid]) for gid in guest_ids if gid in existing
-        ],
-        'mealChoices': [{'value': v, 'label': l} for v, l in MEAL_CHOICES],
+        'existingRsvps': [_rsvp_to_dict(existing[gid]) for gid in guest_ids if gid in existing],
+        'mealChoices': [{'value': value, 'label': label} for value, label in MEAL_CHOICES],
         'replyByDate': REPLY_BY_DATE,
     }
-    return render(request, 'rsvp_party.html', {'party': party_obj, 'rsvp_data_json': json.dumps(data)})
+    return render(
+        request,
+        'rsvp_party.html',
+        {'party': party_obj, 'rsvp_data_json': json.dumps(data)},
+    )
 
 
 @require_http_methods(['POST'])
@@ -85,7 +89,10 @@ def submit(request, code):
             'rsvp_submit_invalid',
             extra={'party_code': party_obj.lookup_code, 'reason': 'malformed_json'},
         )
-        return JsonResponse({'ok': False, 'errors': [{'message': 'Malformed request.'}]}, status=400)
+        return JsonResponse(
+            {'ok': False, 'errors': [{'message': 'Malformed request.'}]},
+            status=400,
+        )
 
     entries = payload.get('guests')
     if not isinstance(entries, list) or not entries:
@@ -93,7 +100,10 @@ def submit(request, code):
             'rsvp_submit_invalid',
             extra={'party_code': party_obj.lookup_code, 'reason': 'empty_guests'},
         )
-        return JsonResponse({'ok': False, 'errors': [{'message': 'No guest responses submitted.'}]}, status=400)
+        return JsonResponse(
+            {'ok': False, 'errors': [{'message': 'No guest responses submitted.'}]},
+            status=400,
+        )
 
     guests_by_id = {g.id: g for g in party_obj.guests.all()}
     errors = []
@@ -115,37 +125,64 @@ def submit(request, code):
 
         if attending:
             if not meal_choice:
-                errors.append({'guest_id': guest.id, 'field': 'meal_choice',
-                               'message': f'Pick a dinner for {guest.name}.'})
+                errors.append(
+                    {
+                        'guest_id': guest.id,
+                        'field': 'meal_choice',
+                        'message': f'Pick a dinner for {guest.name}.',
+                    }
+                )
             elif meal_choice not in VALID_MEAL_VALUES:
-                errors.append({'guest_id': guest.id, 'field': 'meal_choice',
-                               'message': 'That meal choice is not on the menu.'})
+                errors.append(
+                    {
+                        'guest_id': guest.id,
+                        'field': 'meal_choice',
+                        'message': 'That meal choice is not on the menu.',
+                    }
+                )
 
             if guest.plus_one_allowed and plus_one_attending:
                 if not plus_one_name:
-                    errors.append({'guest_id': guest.id, 'field': 'plus_one_name',
-                                   'message': f"Tell us {guest.name}'s guest's name."})
+                    errors.append(
+                        {
+                            'guest_id': guest.id,
+                            'field': 'plus_one_name',
+                            'message': f"Tell us {guest.name}'s guest's name.",
+                        }
+                    )
                 if not plus_one_meal:
-                    errors.append({'guest_id': guest.id, 'field': 'plus_one_meal',
-                                   'message': f"Pick a dinner for {guest.name}'s guest."})
+                    errors.append(
+                        {
+                            'guest_id': guest.id,
+                            'field': 'plus_one_meal',
+                            'message': f"Pick a dinner for {guest.name}'s guest.",
+                        }
+                    )
                 elif plus_one_meal not in VALID_MEAL_VALUES:
-                    errors.append({'guest_id': guest.id, 'field': 'plus_one_meal',
-                                   'message': 'That plus-one meal choice is not on the menu.'})
+                    errors.append(
+                        {
+                            'guest_id': guest.id,
+                            'field': 'plus_one_meal',
+                            'message': 'That plus-one meal choice is not on the menu.',
+                        }
+                    )
         else:
             meal_choice = ''
             plus_one_attending = False
             plus_one_name = ''
             plus_one_meal = ''
 
-        cleaned.append({
-            'guest': guest,
-            'attending': attending,
-            'meal_choice': meal_choice,
-            'plus_one_attending': plus_one_attending,
-            'plus_one_name': plus_one_name,
-            'plus_one_meal': plus_one_meal,
-            'notes': notes,
-        })
+        cleaned.append(
+            {
+                'guest': guest,
+                'attending': attending,
+                'meal_choice': meal_choice,
+                'plus_one_attending': plus_one_attending,
+                'plus_one_name': plus_one_name,
+                'plus_one_meal': plus_one_meal,
+                'notes': notes,
+            }
+        )
 
     if errors:
         logger.warning(

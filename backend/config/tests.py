@@ -77,6 +77,7 @@ class JsonFormatterTests(SimpleTestCase):
             raise ValueError('boom')
         except ValueError:
             import sys
+
             record = self._make_record(msg='oops', level=logging.ERROR)
             record.exc_info = sys.exc_info()
         payload = self._format(record)

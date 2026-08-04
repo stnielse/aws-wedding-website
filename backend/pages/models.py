@@ -14,7 +14,7 @@ class FAQ(models.Model):
 
 
 class RegistryLink(models.Model):
-    name = models.CharField(max_length=200)   # e.g. "Crate & Barrel"
+    name = models.CharField(max_length=200)  # e.g. "Crate & Barrel"
     url = models.URLField()
     order = models.PositiveIntegerField(default=0)
 
