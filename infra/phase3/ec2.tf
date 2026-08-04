@@ -47,6 +47,7 @@ resource "aws_instance" "web" {
     gunicorn_service = templatefile("${path.module}/templates/gunicorn.service.tftpl", {
       app_dir = "/home/ec2-user/aws-wedding-website"
     })
+    nginx_main = file("${path.module}/templates/nginx-main.conf.tftpl")
     nginx_conf = file("${path.module}/templates/nginx-site.conf.tftpl")
   })
   user_data_replace_on_change = false

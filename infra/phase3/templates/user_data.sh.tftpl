@@ -128,19 +128,31 @@ ${gunicorn_service}
 GUNICORNEOF
 
 # --------------------------------------------------------------------------
-# nginx server block
+# nginx: overwrite the stock main config (no default server block) and
+# drop our server block into conf.d/. Sed'ing the stock file's inline
+# server{} block is brittle because it nests location{} blocks -- range
+# regexes stop at the first nested `}` and leave the file half-commented.
+# Replacing the main config wholesale is simpler and drift-immune.
 # --------------------------------------------------------------------------
+cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
+cat > /etc/nginx/nginx.conf <<'NGINXMAINEOF'
+${nginx_main}
+NGINXMAINEOF
+
 cat > /etc/nginx/conf.d/wedding-site.conf <<'NGINXEOF'
 ${nginx_conf}
 NGINXEOF
 
-# AL2023's stock /etc/nginx/nginx.conf includes a default `server { listen 80
-# default_server; ... }` block that conflicts with ours (both default_server
-# on port 80). Neutralize by commenting the block out — ours takes over.
-sed -i.bak '/^\s*server\s*{/,/^\s*}/ s/^/# /' /etc/nginx/nginx.conf
+nginx -t
+
+# Add nginx to the ec2-user group so it can access the gunicorn socket
+# (which lives in /run/gunicorn owned by ec2-user, and is created 660
+# via gunicorn's --umask 007 in the systemd unit).
+usermod -aG ec2-user nginx
 
 # --------------------------------------------------------------------------
 # Start services. systemd creates /run/gunicorn via RuntimeDirectory.
+# gunicorn first so the socket exists before nginx tries to connect.
 # --------------------------------------------------------------------------
 systemctl daemon-reload
 systemctl enable --now gunicorn

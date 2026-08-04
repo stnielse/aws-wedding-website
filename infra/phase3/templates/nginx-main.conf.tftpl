@@ -1,0 +1,41 @@
+# Minimal /etc/nginx/nginx.conf: no default server block, drops
+# /etc/nginx/conf.d/*.conf directly into the http context. Our
+# wedding-site.conf (rendered from nginx-site.conf.tftpl) provides the
+# only server block, so port 80 has exactly one listener and no
+# duplicate default_server conflict.
+#
+# AL2023's stock nginx.conf includes an inline `server { listen 80
+# default_server; ... }` block; attempting to sed it out is brittle
+# because the block contains nested location {} blocks. Replacing the
+# file wholesale is simpler and immune to upstream formatting drift.
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /run/nginx.pid;
+
+# Load dynamic modules (matches AL2023 default). Currently no modules
+# ship in the base package, but the directory is included in case a
+# future dnf update adds one.
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log /var/log/nginx/access.log main;
+
+    sendfile           on;
+    tcp_nopush         on;
+    keepalive_timeout  65;
+    types_hash_max_size 4096;
+
+    include /etc/nginx/conf.d/*.conf;
+}

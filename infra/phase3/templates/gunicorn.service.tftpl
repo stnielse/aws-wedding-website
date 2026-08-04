@@ -13,9 +13,14 @@ WorkingDirectory=${app_dir}/backend
 EnvironmentFile=${app_dir}/backend/.env
 RuntimeDirectory=gunicorn
 RuntimeDirectoryMode=0755
+# --umask 007 creates the unix socket as rw-rw---- with group=ec2-user,
+# so nginx (added to ec2-user in user_data) can connect. Without this,
+# gunicorn inherits systemd's default umask and the socket ends up
+# unreachable by the nginx user -> 502 Bad Gateway.
 ExecStart=${app_dir}/.venv/bin/gunicorn \
     --workers 3 \
     --bind unix:/run/gunicorn/gunicorn.sock \
+    --umask 007 \
     --access-logfile - \
     --error-logfile - \
     config.wsgi:application
