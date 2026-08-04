@@ -34,24 +34,27 @@ echo "=== user_data begin ($(date -Is)) ==="
 dnf -y update
 # NOTE: do NOT list the bare `npm` package here -- on AL2023 that resolves
 # to `nodejs-npm` (npm for node 18) which drags node 18 in as a dep and
-# leaves `alternatives --display node` ambiguous. `nodejs20` alone pulls
-# `nodejs20-npm` as a weak dep, giving us node 20 + its matching npm.
+# leaves `alternatives --display node` ambiguous. `nodejs22` alone pulls
+# `nodejs22-npm` as a weak dep, giving us node 22 + its matching npm.
+#
+# Node 22 (not 20) because frontend/package.json pins pnpm@11.17.0, and
+# pnpm 11 requires Node >= 22.13.
 dnf -y install \
     python3.12 \
     python3.12-devel \
     python3.12-pip \
     nginx \
     git \
-    nodejs20 \
+    nodejs22 \
     postgresql17 \
     jq \
     tar \
     gzip
 
-# Pin node 20 in alternatives in case dnf ordering ever changes.
-alternatives --set node /usr/bin/node-20 || true
+# Pin node 22 in alternatives in case dnf ordering ever changes.
+alternatives --set node /usr/bin/node-22 || true
 
-# pnpm via a direct global npm install -- AL2023's node20 package does not
+# pnpm via a direct global npm install -- AL2023's nodejs22 package does not
 # ship a /usr/bin/corepack shim, so `corepack enable` fails ("command not
 # found"). npm-installed pnpm lands at /usr/bin/pnpm and works the same.
 npm install -g pnpm@11.17.0
