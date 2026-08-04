@@ -32,6 +32,10 @@ echo "=== user_data begin ($(date -Is)) ==="
 # System packages
 # --------------------------------------------------------------------------
 dnf -y update
+# NOTE: do NOT list the bare `npm` package here -- on AL2023 that resolves
+# to `nodejs-npm` (npm for node 18) which drags node 18 in as a dep and
+# leaves `alternatives --display node` ambiguous. `nodejs20` alone pulls
+# `nodejs20-npm` as a weak dep, giving us node 20 + its matching npm.
 dnf -y install \
     python3.12 \
     python3.12-devel \
@@ -39,14 +43,18 @@ dnf -y install \
     nginx \
     git \
     nodejs20 \
-    npm \
     postgresql17 \
     jq \
     tar \
     gzip
 
-corepack enable
-corepack prepare pnpm@11.17.0 --activate
+# Pin node 20 in alternatives in case dnf ordering ever changes.
+alternatives --set node /usr/bin/node-20 || true
+
+# pnpm via a direct global npm install -- AL2023's node20 package does not
+# ship a /usr/bin/corepack shim, so `corepack enable` fails ("command not
+# found"). npm-installed pnpm lands at /usr/bin/pnpm and works the same.
+npm install -g pnpm@11.17.0
 
 # --------------------------------------------------------------------------
 # App bootstrap (as ec2-user via a staged helper script — env comes through
