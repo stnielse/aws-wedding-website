@@ -112,6 +112,28 @@ set -a
 set +a
 "$APP_DIR/.venv/bin/python" manage.py migrate --settings=config.settings.production --noinput
 "$APP_DIR/.venv/bin/python" manage.py collectstatic --settings=config.settings.production --noinput
+
+# gunicorn wrapper. Bash-sources .env (which is @sh-formatted so bash
+# parses quotes correctly) then execs gunicorn. Systemd's EnvironmentFile
+# is not used because AL2023's systemd leaves single quotes literal in
+# values, corrupting multi-value strings like ALLOWED_HOSTS.
+mkdir -p "$APP_DIR/scripts"
+cat > "$APP_DIR/scripts/run-gunicorn.sh" <<'RUNGUNICORNEOF'
+#!/bin/bash
+set -euo pipefail
+APP_DIR="/home/ec2-user/aws-wedding-website"
+set -a
+. "$APP_DIR/backend/.env"
+set +a
+exec "$APP_DIR/.venv/bin/gunicorn" \
+    --workers 3 \
+    --bind unix:/run/gunicorn/gunicorn.sock \
+    --umask 007 \
+    --access-logfile - \
+    --error-logfile - \
+    config.wsgi:application
+RUNGUNICORNEOF
+chmod +x "$APP_DIR/scripts/run-gunicorn.sh"
 BOOTSTRAP
 chmod +x /tmp/bootstrap-app.sh
 
