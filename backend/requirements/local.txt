@@ -1,5 +1,7 @@
-# Local development. Currently just the base — dev tooling (pytest,
-# ruff, etc.) gets added in whichever session first needs it, each
-# pinned exact.
+# Local development. Base plus dev tooling. Every version exact-pinned
+# per [[feedback-strict-version-pins]] so CI + local always agree.
 
 -r base.txt
+
+# Linter + formatter. Config lives at repo-root pyproject.toml.
+ruff==0.16.1
