@@ -29,6 +29,27 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# CloudFront terminates TLS and forwards X-Forwarded-Proto; trust the header
+# so request.is_secure() reports correctly. Do NOT enable SECURE_SSL_REDIRECT
+# -- CloudFront already redirects HTTP to HTTPS at the edge, and a Django-
+# side redirect would compete with the origin fetch.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# CSRF_TRUSTED_ORIGINS is scheme+host per Django 4+. Same comma-separated
+# env shape as ALLOWED_HOSTS. Falls back to apex + www over https for the
+# local `runserver --settings=config.settings.production` path.
+_domain = os.environ['DOMAIN']
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        f'https://{_domain},https://www.{_domain}',
+    ).split(',')
+    if origin.strip()
+]
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
