@@ -13,7 +13,7 @@ resource "aws_cloudfront_distribution" "maintenance" {
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
 
-  aliases = [var.domain_name, "www.${var.domain_name}"]
+  aliases = []
 
   origin {
     origin_id                = "s3-maintenance"
