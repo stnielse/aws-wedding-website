@@ -18,3 +18,12 @@ domain_name = "example.com"
 # REQUIRED. RDS master password. Minimum 8 chars per RDS; pick something
 # long. Sensitive — Terraform marks the value redacted in plan output.
 db_master_password = "REPLACE-ME-WITH-A-LONG-RANDOM-PASSWORD"
+
+# REQUIRED (Session 14+). Same ACM cert ARN used by phase 0. Issued in
+# us-east-1, covers apex + www. CloudFront viewer_certificate reads it.
+acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/REPLACE-ME"
+
+# REQUIRED (Session 14+). Route 53 hosted zone ID for the apex domain.
+# Same ID phase 0 uses; Session 14 imports the existing apex+www records
+# into phase 3 state.
+hosted_zone_id = "Z000000000REPLACEME"
