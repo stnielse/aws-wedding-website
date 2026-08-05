@@ -51,8 +51,36 @@ resource "aws_s3_bucket_lifecycle_configuration" "media" {
   depends_on = [aws_s3_bucket_versioning.media]
 }
 
-# Bucket policy intentionally omitted this session — no CloudFront yet, so
-# bucket access is limited to IAM principals in the account (the console
-# user for verification, the EC2 role once Session 12 attaches it).
-# Session 12 adds an aws_s3_bucket_policy with an AllowCloudFrontOACRead
-# statement scoped to the real distribution ARN.
+# Bucket policy: allow the phase 3 CloudFront distribution (via OAC) to
+# GET objects. Scoped to the exact distribution ARN via AWS:SourceArn so
+# no other distribution -- including phase 0's maintenance CF -- can read
+# from this bucket. EC2 role still reads/writes via its own IAM policy
+# (bucket policies and IAM policies grant additively).
+
+data "aws_iam_policy_document" "media_bucket_policy" {
+  statement {
+    sid     = "AllowCloudFrontOACRead"
+    effect  = "Allow"
+    actions = ["s3:GetObject"]
+
+    resources = ["${aws_s3_bucket.media.arn}/*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.web.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "media" {
+  bucket = aws_s3_bucket.media.id
+  policy = data.aws_iam_policy_document.media_bucket_policy.json
+
+  depends_on = [aws_s3_bucket_public_access_block.media]
+}
