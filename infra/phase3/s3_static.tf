@@ -25,5 +25,34 @@ resource "aws_s3_bucket_public_access_block" "static" {
   restrict_public_buckets = true
 }
 
-# Session 12 will add an AllowCloudFrontOACRead bucket policy scoped to the
-# CDN distribution ARN, the same shape as media's.
+# Bucket policy: identical shape to media's -- grants GetObject to the
+# phase 3 CloudFront distribution's OAC principal only. See s3_media.tf
+# for rationale on the SourceArn scoping.
+
+data "aws_iam_policy_document" "static_bucket_policy" {
+  statement {
+    sid     = "AllowCloudFrontOACRead"
+    effect  = "Allow"
+    actions = ["s3:GetObject"]
+
+    resources = ["${aws_s3_bucket.static.arn}/*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.web.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "static" {
+  bucket = aws_s3_bucket.static.id
+  policy = data.aws_iam_policy_document.static_bucket_policy.json
+
+  depends_on = [aws_s3_bucket_public_access_block.static]
+}
