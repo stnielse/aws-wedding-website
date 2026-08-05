@@ -70,10 +70,15 @@ DATABASES = {
 # (``AWS_STATIC_BUCKET_NAME``). Static gets ``ManifestS3StaticStorage`` so
 # ``collectstatic`` hashes filenames + uploads them in one step.
 
+# S3 key prefixes (``location``) match CloudFront's path patterns exactly:
+# ``/media/*`` and ``/static/*`` behaviors route to the corresponding S3
+# origin without any prefix rewriting. Also keeps the two buckets tidy --
+# every uploaded object sits under its purpose prefix.
 _media_options = {
     'bucket_name': os.environ['AWS_STORAGE_BUCKET_NAME'],
     'region_name': os.environ['AWS_REGION'],
-    'default_acl': None,  # bucket is private; CloudFront OAC (Session 12+) handles access.
+    'location': 'media',
+    'default_acl': None,  # bucket is private; CloudFront OAC handles access.
     'querystring_auth': False,  # public URLs, no signature params.
 }
 if _media_domain := os.environ.get('AWS_S3_CUSTOM_DOMAIN'):
@@ -82,6 +87,7 @@ if _media_domain := os.environ.get('AWS_S3_CUSTOM_DOMAIN'):
 _static_options = {
     'bucket_name': os.environ['AWS_STATIC_BUCKET_NAME'],
     'region_name': os.environ['AWS_REGION'],
+    'location': 'static',
     'default_acl': None,
     'querystring_auth': False,
 }
