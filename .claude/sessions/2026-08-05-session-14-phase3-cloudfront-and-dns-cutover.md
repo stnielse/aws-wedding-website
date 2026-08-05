@@ -136,8 +136,8 @@ Actions OIDC deploy role + `deploy.yml`."
 
 | Area | Decision |
 |---|---|
-| Choice | S3 origins use managed **CachingOptimized** (`658327ea-f89d-4fab-a63d-7e88639e58f6`) + no origin request policy — S3 doesn't need extra headers. EC2 origin uses managed **CachingDisabled** (`4135ea2d-6df8-44a3-9df3-4b5a84be39ad`) + managed **AllViewerExceptHostHeader** origin request policy (`b689b0a8-53d0-40ab-baf2-68738e2966ac`) so cookies + CSRF + user-agent all reach Django but the Host header stays as the origin's own. |
-| Why | Managed policies pin to well-known IDs, so plan diffs stay stable across releases. Dropping the Host header avoids a `DisallowedHost` 400 from Django when it sees the CloudFront domain in the Host — the ALLOWED_HOSTS list already covers apex + www + EIP, but the EC2 origin sees requests as `X-Forwarded-Host: <apex>` from CloudFront, so keeping Host at the origin's public DNS keeps it consistent with what nginx expects. |
+| Choice | S3 origins use managed **CachingOptimized** (`658327ea-f89d-4fab-a63d-7e88639e58f6`) + no origin request policy — S3 doesn't need extra headers. EC2 origin uses managed **CachingDisabled** (`4135ea2d-6df8-44a3-9df3-4b5a84be39ad`) + managed **AllViewer** origin request policy (`216adef6-5c7f-47e4-b989-5492eafa07d3`) so cookies + CSRF + user-agent + **Host header** all reach Django unchanged. |
+| Why | Managed policies pin to well-known IDs, so plan diffs stay stable across releases. Forwarding the viewer's `Host` (apex or www) is what makes `request.build_absolute_uri()` produce correct absolute URLs — otherwise Django would build links back to `ec2-<eip>.compute-1.amazonaws.com`. ALLOWED_HOSTS already lists apex + www + EIP (the last one for direct debug hits), so `DisallowedHost` never fires. |
 
 ### No custom error page rewrite on the dynamic distribution
 
