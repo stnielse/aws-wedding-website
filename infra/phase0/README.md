@@ -1,13 +1,26 @@
-# infra/phase0
+# infra/phase0 — RETIRED 2026-08-05
 
-Phase 0 maintenance page. Serves a static "under construction" HTML at the
+**Status:** destroyed. Session 14 (2026-08-05) landed the phase 3
+CloudFront distribution + DNS cutover, then ran `terraform destroy` on
+this module. No AWS resources here anymore.
+
+This directory is preserved for historical reference (Sessions 2–3 built
+it, Sessions 4–13 kept it running) and because the module structure is a
+useful worked example for future one-shot Terraform modules. Do **not**
+run `terraform apply` here — the CloudFront alias config in `cloudfront.tf`
+still names apex + www, which are now owned by
+`infra/phase3/cloudfront.tf`. A re-apply would collide.
+
+## Historical scope
+
+Phase 0 maintenance page. Served a static "under construction" HTML at the
 apex domain and `www.<domain>` over HTTPS via CloudFront, backed by a private
-S3 bucket (OAC-restricted). Any path a visitor tries maps to the same page
+S3 bucket (OAC-restricted). Any path a visitor tried mapped to the same page
 via CloudFront custom error responses.
 
-This module is intentionally standalone — it gets destroyed when Phase 3 (the
-main Terraform config in `infra/`) starts, so the Phase 4 CloudFront
-distribution is created fresh instead of being extended in place.
+The module was intentionally standalone — it was destroyed when Phase 3
+came online in Session 14, so the phase 3 CloudFront distribution got
+created fresh instead of being extended in place.
 
 ## Prereqs
 
