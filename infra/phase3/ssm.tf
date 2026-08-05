@@ -80,9 +80,16 @@ resource "aws_ssm_parameter" "domain" {
 
 resource "aws_ssm_parameter" "allowed_hosts" {
   name        = "${local.ssm_prefix}/ALLOWED_HOSTS"
-  description = "Comma-separated ALLOWED_HOSTS. Session 12: EIP + domain. Session 13 drops EIP once CloudFront is fronting."
+  description = "Comma-separated ALLOWED_HOSTS. CloudFront AllViewer forwards viewer Host verbatim, so apex + www cover CloudFront-served requests. EIP retained for direct-hit debugging."
   type        = "String"
   value       = join(",", [aws_eip.web.public_ip, var.domain_name, "www.${var.domain_name}"])
+}
+
+resource "aws_ssm_parameter" "csrf_trusted_origins" {
+  name        = "${local.ssm_prefix}/CSRF_TRUSTED_ORIGINS"
+  description = "Comma-separated Django CSRF_TRUSTED_ORIGINS. Same shape as ALLOWED_HOSTS but each entry is a scheme://host origin."
+  type        = "String"
+  value       = join(",", ["https://${var.domain_name}", "https://www.${var.domain_name}"])
 }
 
 resource "aws_ssm_parameter" "aws_region" {
@@ -101,4 +108,24 @@ resource "aws_ssm_parameter" "aws_static_bucket_name" {
   name  = "${local.ssm_prefix}/AWS_STATIC_BUCKET_NAME"
   type  = "String"
   value = aws_s3_bucket.static.bucket
+}
+
+# Both media and static are served through the same CloudFront distribution
+# on the apex domain -- /media/* and /static/* cache behaviors route to the
+# right S3 origin. django-storages builds URLs like
+# https://<domain>/media/<key> and https://<domain>/static/<key> (with
+# AWS_LOCATION='media' / 'static' on the storage options).
+
+resource "aws_ssm_parameter" "aws_s3_custom_domain" {
+  name        = "${local.ssm_prefix}/AWS_S3_CUSTOM_DOMAIN"
+  description = "Public host django-storages puts in media URLs. Apex domain (routed through CloudFront /media/*)."
+  type        = "String"
+  value       = var.domain_name
+}
+
+resource "aws_ssm_parameter" "aws_static_custom_domain" {
+  name        = "${local.ssm_prefix}/AWS_STATIC_CUSTOM_DOMAIN"
+  description = "Public host django-storages puts in static URLs. Apex domain (routed through CloudFront /static/*)."
+  type        = "String"
+  value       = var.domain_name
 }
