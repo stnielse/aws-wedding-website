@@ -1,5 +1,7 @@
-"""Tests for the storage + logging plumbing added in Session 10 and the
-ALLOWED_HOSTS parsing added in Session 13."""
+"""Tests for the storage + logging plumbing added in Session 10, the
+ALLOWED_HOSTS parsing added in Session 13, and the CloudFront-aware
+settings (CSRF_TRUSTED_ORIGINS, secure cookies, proxy SSL header,
+S3 location prefixes) added in Session 14."""
 
 import importlib
 import json
@@ -139,3 +141,98 @@ class AllowedHostsParsingTests(SimpleTestCase):
         with mock.patch.dict(os.environ, env, clear=True):
             module = self._reimport_production()
         self.assertEqual(module.ALLOWED_HOSTS, ['a.example.com', 'b.example.com'])
+
+
+# The Session 14 tests all reimport production.settings under a mocked env.
+# Share the base env used above so a new required var lands in exactly one
+# spot.
+_PROD_BASE_ENV = AllowedHostsParsingTests._base_env
+
+
+def _reimport_production():
+    sys.modules.pop('config.settings.production', None)
+    return importlib.import_module('config.settings.production')
+
+
+class CsrfTrustedOriginsTests(SimpleTestCase):
+    """production.settings parses CSRF_TRUSTED_ORIGINS as a comma-separated
+    env var, falling back to https://<DOMAIN> + https://www.<DOMAIN>."""
+
+    def test_defaults_to_apex_and_www_https(self):
+        env = dict(_PROD_BASE_ENV)
+        env.pop('CSRF_TRUSTED_ORIGINS', None)
+        with mock.patch.dict(os.environ, env, clear=True):
+            module = _reimport_production()
+        self.assertEqual(
+            module.CSRF_TRUSTED_ORIGINS,
+            ['https://example.com', 'https://www.example.com'],
+        )
+
+    def test_splits_comma_separated_values(self):
+        env = {
+            **_PROD_BASE_ENV,
+            'CSRF_TRUSTED_ORIGINS': 'https://a.example.com,https://b.example.com',
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            module = _reimport_production()
+        self.assertEqual(
+            module.CSRF_TRUSTED_ORIGINS,
+            ['https://a.example.com', 'https://b.example.com'],
+        )
+
+    def test_strips_whitespace_and_drops_empty_entries(self):
+        env = {
+            **_PROD_BASE_ENV,
+            'CSRF_TRUSTED_ORIGINS': ' https://a.example.com , ,https://b.example.com,',
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            module = _reimport_production()
+        self.assertEqual(
+            module.CSRF_TRUSTED_ORIGINS,
+            ['https://a.example.com', 'https://b.example.com'],
+        )
+
+
+class SecureCookieAndProxyHeaderTests(SimpleTestCase):
+    """production.settings sets SESSION_COOKIE_SECURE, CSRF_COOKIE_SECURE,
+    and trusts X-Forwarded-Proto from CloudFront."""
+
+    def test_secure_proxy_ssl_header_is_x_forwarded_proto(self):
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertEqual(
+            module.SECURE_PROXY_SSL_HEADER,
+            ('HTTP_X_FORWARDED_PROTO', 'https'),
+        )
+
+    def test_session_and_csrf_cookies_are_secure(self):
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertTrue(module.SESSION_COOKIE_SECURE)
+        self.assertTrue(module.CSRF_COOKIE_SECURE)
+
+    def test_secure_ssl_redirect_stays_off(self):
+        # CloudFront handles the HTTP->HTTPS redirect at the edge; Django
+        # should not compete.
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertFalse(getattr(module, 'SECURE_SSL_REDIRECT', False))
+
+
+class StorageLocationPrefixTests(SimpleTestCase):
+    """production.settings sets location='media' / 'static' on the S3
+    storage backends so keys match CloudFront's /media/* and /static/*
+    behaviors."""
+
+    def test_media_backend_uses_media_prefix(self):
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertEqual(module.STORAGES['default']['OPTIONS']['location'], 'media')
+
+    def test_static_backend_uses_static_prefix(self):
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertEqual(
+            module.STORAGES['staticfiles']['OPTIONS']['location'],
+            'static',
+        )
