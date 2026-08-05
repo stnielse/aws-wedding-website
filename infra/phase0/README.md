@@ -90,19 +90,19 @@ aws cloudfront create-invalidation \
   --paths '/index.html' '/'
 ```
 
-## Teardown
+## Teardown (already executed)
 
 ```sh
 terraform destroy
 ```
 
-Everything the module created goes away, including the bucket contents
-(`force_destroy = true`). CloudFront disable+delete takes 15-30 minutes;
-Terraform handles both steps.
+Executed 2026-08-05 as part of Session 14, after phase 3's CloudFront +
+DNS cutover was verified live. Everything the module created is gone,
+including the bucket contents (`force_destroy = true`). CloudFront
+disable+delete took ~20 minutes.
 
-After `destroy` completes, the only Phase 0 residue should be in
-`terraform.tfstate*` (local, gitignored). Delete those manually if you want
-zero trace on disk.
+`terraform.tfstate*` files remain on disk (local, gitignored) as an
+audit trail — delete them by hand if you want zero trace.
 
 ## Cost estimate
 
