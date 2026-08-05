@@ -86,6 +86,9 @@ resource "aws_instance" "web" {
     aws_ssm_parameter.aws_region,
     aws_ssm_parameter.aws_storage_bucket_name,
     aws_ssm_parameter.aws_static_bucket_name,
+    aws_ssm_parameter.aws_s3_custom_domain,
+    aws_ssm_parameter.aws_static_custom_domain,
+    aws_ssm_parameter.csrf_trusted_origins,
   ]
 }
 
