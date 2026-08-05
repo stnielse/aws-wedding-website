@@ -128,3 +128,22 @@ output "ssm_parameter_prefix" {
   value       = local.ssm_prefix
   description = "SSM Parameter Store prefix (all wedding-site prod env vars live under this path)."
 }
+
+# --------------------------------------------------------------------------
+# CloudFront (Session 14)
+# --------------------------------------------------------------------------
+
+output "cloudfront_distribution_id" {
+  value       = aws_cloudfront_distribution.web.id
+  description = "CloudFront distribution ID (use with aws cloudfront create-invalidation)."
+}
+
+output "cloudfront_domain_name" {
+  value       = aws_cloudfront_distribution.web.domain_name
+  description = "CloudFront-assigned domain, e.g. d1234.cloudfront.net. Route 53 aliases (managed in this module) point here."
+}
+
+output "cloudfront_hosted_zone_id" {
+  value       = aws_cloudfront_distribution.web.hosted_zone_id
+  description = "Hosted-zone ID CloudFront reports for alias records (always Z2FDTNDATAQYW2, but read from the resource so it stays authoritative)."
+}
