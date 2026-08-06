@@ -313,20 +313,22 @@ avoids AWS's wrapper quirks entirely.
 **3d. Branch protection required checks never satisfied due to trigger-suffix collision.**
 Initial `ci.yml` had `on: [push, pull_request, workflow_call]`.
 On every push to a PR branch, GitHub fired ci twice (once per
-event) and disambiguated the check names by appending
-`(push)` / `(pull_request)` — so the actual check runs were named
-`ci / python (push)` and `ci / python (pull_request)`. Branch
-protection required `ci / python` (no suffix), which never
-appeared, so PRs stayed pending "Expected — Waiting for status to
-be reported" indefinitely. Fix: drop `on: push` from ci.yml so
-only one event ever triggers per PR, which removes the suffix and
-makes the check names match branch protection's expectation.
-`workflow_call` stayed (deploy.yml still reuses ci.yml on push to
-main). **Lesson:** when the same workflow can be triggered by
-multiple events on the same ref, GitHub disambiguates check names
-by tacking the event on — and branch protection's required-check
-selector matches the exact name, suffix included. Pick one PR-time
-trigger and stick with it.
+event) AND appended a `(push)` / `(pull_request)` suffix to the
+check names. First attempted fix: drop `on: push` so only
+`pull_request` fires — expected the suffix to go away. It didn't.
+Turns out GitHub adds the event suffix whenever a workflow has
+*multiple* `on:` triggers *configured*, even if only one fires
+per run. Since `on: workflow_call` (kept so deploy.yml can reuse
+ci.yml) counts, the suffix stays. Real fix: leave ci.yml as-is
+and update branch protection to require the actual names GitHub
+produces — `ci / python (pull_request)` and
+`ci / frontend (pull_request)`. **Lesson:** the trigger-event
+suffix is a property of the workflow config, not the specific run.
+Multiple `on:` entries → always suffixed. Only workarounds are (a)
+match branch protection to the suffixed name, or (b) split the
+workflow into two files (one `on: pull_request`, one
+`on: workflow_call`) both calling a common set of reusable jobs.
+Chose (a) — fewer files.
 
 **4. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
 Wanted to scope the deploy role's `GetCommandInvocation` to only
@@ -360,10 +362,13 @@ git write ops per [[feedback-git-operations]], nor long-running
     - Require conversation resolution before merging
   - Require status checks to pass
     - Select the two CI job names once they've reported at least once
-      on a PR: **`ci / python`** and **`ci / frontend`** (the `ci /`
-      prefix comes from `deploy.yml` calling `ci.yml` via
-      `workflow_call`; check names show up in the picker as
-      `<caller-job-id> / <called-job-name>`).
+      on a PR: **`ci / python (pull_request)`** and
+      **`ci / frontend (pull_request)`**. GitHub tacks the trigger
+      event onto the check name whenever a workflow has multiple
+      `on:` triggers configured (ci.yml has `pull_request` +
+      `workflow_call`), so the suffix is unavoidable short of
+      splitting the workflow into two files. Match branch protection
+      to what GitHub actually produces.
     - Require branches to be up to date before merging
 - **Bypass list:** add `stnielse` as Role: Repository admin, Mode:
   Always. Emergency direct-push valve; every other push goes through
