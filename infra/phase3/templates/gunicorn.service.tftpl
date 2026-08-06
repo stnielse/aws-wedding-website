@@ -26,8 +26,20 @@ RuntimeDirectoryMode=0755
 ExecStart=${app_dir}/scripts/run-gunicorn.sh
 Restart=on-failure
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
+
+# gunicorn stdout+stderr -> /var/log/gunicorn/gunicorn.log. The
+# CloudWatch Agent (Session 15) tails this file into the
+# /wedding-site/django log group. Not StandardOutput=journal because
+# amazon-cloudwatch-agent 1.300 does not accept `journald` under
+# logs.logs_collected -- only files, windows_events, and emf.
+# LogsDirectory=gunicorn creates /var/log/gunicorn/ owned by ec2-user
+# at service start, so append: can write the file without a chmod
+# dance in user_data. Rotation is handled by logrotate config
+# dropped in from user_data (see /etc/logrotate.d/gunicorn).
+LogsDirectory=gunicorn
+LogsDirectoryMode=0755
+StandardOutput=append:/var/log/gunicorn/gunicorn.log
+StandardError=append:/var/log/gunicorn/gunicorn.log
 
 [Install]
 WantedBy=multi-user.target

@@ -257,7 +257,90 @@ explicit design — don't just duplicate the build. Also: PR-triggered
 runs of ci.yml still don't upload anything (the input defaults to
 false), so PRs stay fast.
 
-**3. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
+**3. CloudWatch Agent doesn't accept `journald` under `logs.logs_collected`.**
+First draft of `ssm.tf`'s agent config had a `journald` block
+pointing at the `gunicorn.service` unit. Install succeeded on the
+running instance, but `amazon-cloudwatch-agent-ctl -a fetch-config`
+returned `Under path : /logs/logs_collected | Error : Additional
+property journald is not allowed` and the agent never started.
+amazon-cloudwatch-agent 1.300.x only supports `files`,
+`windows_events`, and `emf` under `logs_collected` — the "collect
+from systemd journal" feature I remembered doesn't actually exist
+in this codebase. Fix: switched `gunicorn.service.tftpl` from
+`StandardOutput=journal` to `StandardOutput=append:/var/log/
+gunicorn/gunicorn.log`, added a matching `files` entry to the
+agent config, and added a `/etc/logrotate.d/gunicorn` drop-in
+(`copytruncate`, daily, keep 14) so the file doesn't grow
+unbounded. **Lesson:** don't assume agent feature availability
+from memory — the schema is narrow, and the file-based path is
+the actually-supported one.
+
+**3b. `LogsDirectory=` doesn't race-safe-create the directory before `append:` opens the file.**
+First recovery attempt trusted systemd's `LogsDirectory=gunicorn`
+to create `/var/log/gunicorn/` at service start. It did not —
+gunicorn failed 30+ restart attempts with `Failed at step STDOUT
+spawning ...: No such file or directory` (exit 209/STDOUT).
+`StandardOutput=append:PATH` opens the file during pre-exec setup,
+apparently before `LogsDirectory=` materializes the directory (or
+systemd's LogsDirectory only creates when User= is a dynamic user,
+not our real ec2-user — the exact ordering is undocumented enough
+that I stopped chasing it). Fix: pre-create the directory
+explicitly in both `user_data.sh.tftpl` (already done via
+`LogsDirectory=` for fresh boots, plus the same directory is
+recreated by the fix script on existing boxes) and in the recovery
+script (`install -d -o ec2-user -g ec2-user -m 0755
+/var/log/gunicorn`). Kept `LogsDirectory=` in the unit for defense
+in depth; the explicit `install -d` is the real guarantee.
+**Lesson:** systemd's implicit directory creation directives are
+convenient but not reliable enough to build a service open on.
+When `StandardOutput=append:` (or any file-open pre-exec directive)
+depends on a directory, make sure the directory exists via a real,
+explicit `install -d` or `mkdir -p` before the first restart.
+
+**3c. SSM SendCommand with a multi-line script blob triggered "cannot execute: required file not found."**
+Recovery attempt via `send-command --parameters commands=[<big_
+multiline_script>]` failed with exit 127 at the shebang. The
+script file the SSM agent wrote to disk had a valid shebang and
+LF endings, but AWS's wrapper apparently exec'd the file directly
+via a path where the shebang interpreter lookup failed (root
+cause not diagnosed). Working fix: base64-encode the script on the
+Mac, send a single-line command `echo <b64> | base64 -d | bash`.
+No file on disk, no shebang, no exec dance. **Lesson:** for any
+non-trivial SSM SendCommand payload, prefer base64+pipe over
+multi-line `commands` arrays — it's paste-safe, shebang-free, and
+avoids AWS's wrapper quirks entirely.
+
+**3d. Branch protection required checks never satisfied due to trigger-suffix collision.**
+Full odyssey. Initial `ci.yml` had `on: [push, pull_request,
+workflow_call]`. Every push to a PR branch fired ci twice (once
+per event) AND appended a `(push)` / `(pull_request)` suffix to
+the check names. Branch protection required `ci / python` (no
+suffix), which never appeared. First attempted fix: drop
+`on: push` so only `pull_request` fires — suffix stays because
+`workflow_call` still counts as a second configured trigger.
+Second attempted fix: update branch protection to require
+`ci / python (pull_request)` — the ruleset UI accepts the typed
+string but the required check never reconciles against the
+actual check runs (either GitHub-side validation binds required
+checks to picker-listed names only, or an invisible-char paste
+issue). "Require workflows to succeed" (which matches by workflow
+file path, not check name) is Enterprise-only, not available on
+Pro. Actual fix: split `ci.yml` into two single-trigger files —
+`pr-checks.yml` (`on: pull_request` only, plain python +
+frontend jobs) and `deploy.yml` (own inlined python + frontend
+jobs + deploy job, `on: push:main + workflow_dispatch` only).
+Neither file has multiple `on:` triggers, so no suffix on either.
+`ci.yml` is deleted; branch protection requires `pr-checks /
+python` and `pr-checks / frontend` (populated from the picker).
+Cost: ~50 lines of duplicated YAML between pr-checks.yml and
+deploy.yml. **Lesson:** on Pro plans, don't reuse a single
+workflow file across multiple trigger types via `workflow_call`
+when any of those triggers need to satisfy branch protection —
+the suffix collision is unavoidable and GitHub's ruleset UI
+won't reconcile manually-typed suffixed names. Two thin single-
+trigger files with duplicated jobs are pragmatic.
+
+**4. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
 Wanted to scope the deploy role's `GetCommandInvocation` to only
 the wedding-site instance via a `ssm:resourceTag/Name` condition.
 Doesn't work — command-invocation resources aren't tagged the way
@@ -288,11 +371,11 @@ git write ops per [[feedback-git-operations]], nor long-running
     - Required approvals: `0` (solo project, keeps the PR workflow)
     - Require conversation resolution before merging
   - Require status checks to pass
-    - Select the two CI job names once they've reported at least once
-      on a PR: **`ci / python`** and **`ci / frontend`** (the `ci /`
-      prefix comes from `deploy.yml` calling `ci.yml` via
-      `workflow_call`; check names show up in the picker as
-      `<caller-job-id> / <called-job-name>`).
+    - Select the two check names from the picker once they've
+      reported at least once on a PR:
+      **`pr-checks / python`** and **`pr-checks / frontend`**.
+      No event suffix — both come from `pr-checks.yml`, which has
+      a single `on: pull_request` trigger.
     - Require branches to be up to date before merging
 - **Bypass list:** add `stnielse` as Role: Repository admin, Mode:
   Always. Emergency direct-push valve; every other push goes through
@@ -371,14 +454,15 @@ show up in whatever page has a git-sha footer (or via SSM
 
 **Created:**
 - `.claude/sessions/2026-08-05-session-15-ops-and-deploy.md` — this log
-- `.github/workflows/deploy.yml`
+- `.github/workflows/pr-checks.yml` (single-trigger on: pull_request; python + frontend jobs)
+- `.github/workflows/deploy.yml` (single-trigger on: push:main + workflow_dispatch; python + frontend + deploy jobs, self-contained)
 - `infra/phase3/cloudwatch.tf`
 - `infra/phase3/oidc.tf`
 - `scripts/deploy.sh`
 - `scripts/cleanup_static_bucket_root.py`
 
-**Modified:**
-- `.github/workflows/ci.yml` (Node 22, workflow_call trigger, optional artifact upload)
+**Deleted:**
+- `.github/workflows/ci.yml` (superseded by pr-checks.yml + inlined deploy.yml jobs — see digression 3d for the reason)
 - `infra/phase3/variables.tf` (added `alert_email`, `github_repository`)
 - `infra/phase3/terraform.tfvars.example` (documented the two new vars)
 - `infra/phase3/outputs.tf` (CloudWatch, SNS, github-deploy role outputs)

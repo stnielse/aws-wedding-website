@@ -1,13 +1,18 @@
-# Continuous integration for the wedding-site repo.
+# PR-time verification for the wedding-site repo.
 #
-# Two parallel jobs. `python` runs ruff + Django's test runner against
-# the local settings module. `frontend` runs oxlint (aliased to
-# `pnpm lint` in frontend/package.json) and a full production build to
-# catch any Vite/rollup-time regressions.
+# Two parallel jobs, same shape as deploy.yml's python + frontend
+# jobs but without the artifact-upload side effect (there's nothing
+# to ship from a PR).
 #
-# Also exposed as a reusable workflow (`workflow_call`) so
-# `deploy.yml` can rerun lint + tests before touching the instance
-# without duplicating the job definitions here.
+# Single `on: pull_request` trigger by design. Any additional `on:`
+# entry makes GitHub tack the trigger event onto every check-run
+# name (e.g. "pr-checks / python (pull_request)"), and the ruleset
+# picker doesn't populate those suffixed variants -- branch
+# protection ends up with a required check nobody produces.
+# Splitting the workflow into per-trigger files is the workaround
+# on Pro plans (rulesets' "Require workflows to succeed" rule is
+# Enterprise-only). Cost: python + frontend job definitions are
+# duplicated in deploy.yml; keep them in sync.
 #
 # Node 22 (not 20) because frontend/package.json pins pnpm@11.17.0
 # and pnpm 11 requires Node >= 22.13. Matches the AL2023 install in
@@ -15,25 +20,13 @@
 #
 # Actions pinned to exact release tags per [[feedback-strict-version-pins]].
 
-name: ci
+name: pr-checks
 
 on:
-  push:
   pull_request:
-  workflow_call:
-    inputs:
-      upload_artifact:
-        description: >-
-          When true, the frontend job also uploads the built
-          backend/static/frontend/ tree as a GitHub Actions artifact
-          named "frontend-dist". deploy.yml sets this true so it can
-          download the artifact and ship to S3 without rebuilding.
-        type: boolean
-        default: false
-        required: false
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: pr-checks-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -97,12 +90,3 @@ jobs:
       - name: Build
         working-directory: frontend
         run: pnpm build
-
-      - name: Upload build artifact for downstream deploy
-        if: ${{ inputs.upload_artifact }}
-        uses: actions/upload-artifact@v4.4.3
-        with:
-          name: frontend-dist
-          path: backend/static/frontend/
-          if-no-files-found: error
-          retention-days: 7
