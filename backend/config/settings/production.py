@@ -37,6 +37,13 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
+# HSTS soak (Session 15). 60 seconds is short enough that any HTTPS
+# breakage recovers in a minute, but the header is actually being sent
+# and browsers pin us to HTTPS for that window. Session 16 ramps to
+# 31536000 (one year) + INCLUDE_SUBDOMAINS + PRELOAD once we're
+# confident nothing else regresses.
+SECURE_HSTS_SECONDS = 60
+
 # CSRF_TRUSTED_ORIGINS is scheme+host per Django 4+. Same comma-separated
 # env shape as ALLOWED_HOSTS. Falls back to apex + www over https for the
 # local `runserver --settings=config.settings.production` path.
