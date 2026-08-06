@@ -393,8 +393,65 @@ user.
 
 ## Session 16 handoff
 
-Session 16 = **HSTS full ramp + RDS deletion protection + real
-gallery page + any launch-checklist prep.** Ordered by risk/urgency:
+Session 16 = **First-deploy bootstrap fix + HSTS full ramp + RDS
+deletion protection + real gallery page + any launch-checklist
+prep.** Ordered by risk/urgency:
+
+### Step 0 (URGENT) — bootstrap `scripts/deploy.sh` onto the running instance
+
+First automated deploy on 2026-08-05 failed with:
+
+```
+sudo: /home/ec2-user/aws-wedding-website/scripts/deploy.sh: command not found
+```
+
+Chicken-and-egg: `scripts/deploy.sh` was created in the same PR
+that first triggered `deploy.yml`. The running EC2 instance's git
+checkout is from Session 12/13 (pre-scripts/deploy.sh), and
+`deploy.yml`'s SSM SendCommand tried to invoke a file that doesn't
+exist on the box yet.
+
+**Fix** — a one-time manual `git pull` on the instance to bring
+its checkout up to a SHA that contains the deploy script. From
+the Mac:
+
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+
+# Push a one-liner that git-pulls, then re-triggers the deploy workflow
+aws ssm send-command \
+  --instance-ids "$INSTANCE_ID" \
+  --document-name AWS-RunShellScript \
+  --comment "S16 bootstrap: git pull to pick up scripts/deploy.sh" \
+  --parameters 'commands=["sudo -u ec2-user bash -c \"cd /home/ec2-user/aws-wedding-website && git fetch origin && git checkout main && git pull origin main && ls -la scripts/deploy.sh\""]' \
+  --query 'Command.CommandId' --output text
+# poll GetCommandInvocation as usual
+```
+
+Then re-trigger the deploy workflow from the GitHub Actions UI
+(deploy.yml → Run workflow → main). It should succeed this time.
+
+**Guard for the future:** consider adding a `git fetch + git
+checkout <sha>` step to `deploy.yml`'s SSM command body BEFORE
+invoking `scripts/deploy.sh`, so any drift between the box's
+checkout and the deployed SHA self-heals. Something like:
+
+```
+sudo -u ec2-user bash -c '
+  cd /home/ec2-user/aws-wedding-website
+  git fetch origin
+  git checkout $SHA
+' && sudo -u ec2-user /home/ec2-user/aws-wedding-website/scripts/deploy.sh $SHA $ARTIFACT_URL
+```
+
+That way even if deploy.sh itself is missing from the current
+checkout, we fetch first and it becomes present. (The current
+`deploy.sh` already does `git fetch + git checkout` internally,
+so once bootstrapped, subsequent deploys handle their own SHA
+alignment — this is only an issue for the very first deploy
+after adding new files under `scripts/`.)
+
+### Step 1 — HSTS ramp (assuming Session 15's 60s soak is clean)
 
 ### Step 1 — HSTS ramp (assuming Session 15's 60s soak is clean)
 
