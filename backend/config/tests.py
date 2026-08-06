@@ -218,6 +218,14 @@ class SecureCookieAndProxyHeaderTests(SimpleTestCase):
             module = _reimport_production()
         self.assertFalse(getattr(module, 'SECURE_SSL_REDIRECT', False))
 
+    def test_hsts_seconds_set_to_soak_value(self):
+        # Session 15 lands SECURE_HSTS_SECONDS=60 as a short soak.
+        # If this needs to change, ramp deliberately (60 -> 3600 -> a
+        # week -> a year); don't drift the value silently.
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertEqual(module.SECURE_HSTS_SECONDS, 60)
+
 
 class StorageLocationPrefixTests(SimpleTestCase):
     """production.settings sets location='media' / 'static' on the S3
