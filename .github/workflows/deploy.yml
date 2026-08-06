@@ -4,21 +4,29 @@
 # redeploy without a code change (e.g., after rotating a secret in
 # SSM and needing a gunicorn restart).
 #
-# Two-job pipeline:
+# Four jobs:
 #
-#   ci      Reuses .github/workflows/ci.yml via workflow_call, with
-#           upload_artifact: true so the frontend job also uploads
-#           its built backend/static/frontend tree as a GHA artifact
-#           ("frontend-dist"). Deploy is gated on this -- a green
-#           push cannot ship a broken tree, and there's exactly one
-#           `pnpm build` per deploy across the whole pipeline.
+#   python    Re-runs Django tests + ruff against the head SHA on
+#             main so a green push cannot ship a broken tree. Same
+#             steps as pr-checks.yml's python job; keep them in
+#             sync.
+#   frontend  Node 22 + pnpm build; uploads
+#             backend/static/frontend/ as a GHA artifact
+#             (frontend-dist) for the deploy job to download.
+#             Duplicates pr-checks.yml's frontend job plus the
+#             upload step.
+#   deploy    needs [python, frontend]. Downloads frontend-dist,
+#             tars it, uploads to
+#             s3://<static-bucket>/deploy/frontend-<sha>.tar.gz,
+#             then fires SSM SendCommand against the wedding-site
+#             EC2 instance to run scripts/deploy.sh with the git
+#             sha + S3 URL. Polls GetCommandInvocation until
+#             terminal; fails on anything other than Success.
 #
-#   deploy  Downloads the frontend-dist artifact, tars it, uploads
-#           to s3://<static-bucket>/deploy/frontend-<sha>.tar.gz,
-#           then fires SSM SendCommand against the wedding-site EC2
-#           instance to run scripts/deploy.sh with the git sha + S3
-#           URL. Polls GetCommandInvocation until terminal; fails
-#           the workflow on anything other than Success.
+# Single `on:` trigger set (push:main + workflow_dispatch) so
+# check-run names don't get an event suffix. This mirrors why
+# pr-checks.yml is separate -- see that file's header for the full
+# story on why the split exists.
 #
 # Uses OIDC to assume the deploy role -- no long-lived AWS keys
 # anywhere in this file. Trust policy in infra/phase3/oidc.tf
@@ -51,15 +59,78 @@ permissions:
   contents: read
 
 jobs:
-  ci:
-    name: ci
-    uses: ./.github/workflows/ci.yml
-    with:
-      upload_artifact: true
+  python:
+    name: python
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements/base.txt
+            backend/requirements/production.txt
+            backend/requirements/local.txt
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            -r backend/requirements/production.txt \
+            -r backend/requirements/local.txt
+
+      - name: Ruff check
+        run: ruff check backend/
+
+      - name: Ruff format check
+        run: ruff format --check backend/
+
+      - name: Django tests
+        working-directory: backend
+        run: python manage.py test --verbosity=2
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4.1.0
+        with:
+          node-version: '22'
+
+      - name: Enable corepack (pnpm 11.17.0 pinned in package.json)
+        run: corepack enable
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Upload build artifact for deploy job
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: frontend-dist
+          path: backend/static/frontend/
+          if-no-files-found: error
+          retention-days: 7
 
   deploy:
     name: deploy
-    needs: [ci]
+    needs: [python, frontend]
     runs-on: ubuntu-24.04
     env:
       AWS_REGION: us-east-1
@@ -71,10 +142,10 @@ jobs:
           path: frontend-dist/
 
       - name: Package build output
-        # ci.yml uploaded the whole backend/static/frontend tree
-        # under frontend-dist/. Tar contents go straight into that
-        # same directory on the instance (scripts/deploy.sh extracts
-        # with -C backend/static/frontend).
+        # The frontend job uploaded the whole backend/static/frontend
+        # tree under frontend-dist/. Tar contents go straight into
+        # that same directory on the instance (scripts/deploy.sh
+        # extracts with -C backend/static/frontend).
         run: |
           cd frontend-dist
           tar -czf "$RUNNER_TEMP/frontend.tar.gz" .
