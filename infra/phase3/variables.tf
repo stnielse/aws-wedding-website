@@ -36,3 +36,13 @@ variable "hosted_zone_id" {
   type        = string
   description = "Route 53 hosted zone ID for the apex domain. Session 14 moves the apex + www alias records into phase 3 to point at this module's CloudFront distribution."
 }
+
+variable "alert_email" {
+  type        = string
+  description = "Email address that receives CloudWatch alarm notifications (Django ERROR/CRITICAL). AWS sends a confirmation email that must be clicked before delivery starts."
+}
+
+variable "github_repository" {
+  type        = string
+  description = "GitHub repository in owner/name form, used to scope the OIDC deploy role's sub-claim condition. E.g. stnielse/aws-wedding-website."
+}
