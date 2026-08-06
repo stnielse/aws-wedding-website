@@ -268,18 +268,47 @@ amazon-cloudwatch-agent 1.300.x only supports `files`,
 from systemd journal" feature I remembered doesn't actually exist
 in this codebase. Fix: switched `gunicorn.service.tftpl` from
 `StandardOutput=journal` to `StandardOutput=append:/var/log/
-gunicorn/gunicorn.log` (with `LogsDirectory=gunicorn` so systemd
-creates the dir owned by ec2-user at service start), added a
-matching `files` entry to the agent config, and added a
-`/etc/logrotate.d/gunicorn` drop-in (`copytruncate`, daily, keep
-14) so the file doesn't grow unbounded. **Lesson:** don't assume
-agent feature availability from memory — the schema is narrow, and
-the file-based path is the actually-supported one. Also: an
-overlooked knock-on is that the `gunicorn.service` template change
-doesn't apply to the running instance (per
-`user_data_replace_on_change = false`), so the recovery needed a
-manual `systemd unit rewrite + daemon-reload + restart` on the
-existing box in addition to the terraform apply.
+gunicorn/gunicorn.log`, added a matching `files` entry to the
+agent config, and added a `/etc/logrotate.d/gunicorn` drop-in
+(`copytruncate`, daily, keep 14) so the file doesn't grow
+unbounded. **Lesson:** don't assume agent feature availability
+from memory — the schema is narrow, and the file-based path is
+the actually-supported one.
+
+**3b. `LogsDirectory=` doesn't race-safe-create the directory before `append:` opens the file.**
+First recovery attempt trusted systemd's `LogsDirectory=gunicorn`
+to create `/var/log/gunicorn/` at service start. It did not —
+gunicorn failed 30+ restart attempts with `Failed at step STDOUT
+spawning ...: No such file or directory` (exit 209/STDOUT).
+`StandardOutput=append:PATH` opens the file during pre-exec setup,
+apparently before `LogsDirectory=` materializes the directory (or
+systemd's LogsDirectory only creates when User= is a dynamic user,
+not our real ec2-user — the exact ordering is undocumented enough
+that I stopped chasing it). Fix: pre-create the directory
+explicitly in both `user_data.sh.tftpl` (already done via
+`LogsDirectory=` for fresh boots, plus the same directory is
+recreated by the fix script on existing boxes) and in the recovery
+script (`install -d -o ec2-user -g ec2-user -m 0755
+/var/log/gunicorn`). Kept `LogsDirectory=` in the unit for defense
+in depth; the explicit `install -d` is the real guarantee.
+**Lesson:** systemd's implicit directory creation directives are
+convenient but not reliable enough to build a service open on.
+When `StandardOutput=append:` (or any file-open pre-exec directive)
+depends on a directory, make sure the directory exists via a real,
+explicit `install -d` or `mkdir -p` before the first restart.
+
+**3c. SSM SendCommand with a multi-line script blob triggered "cannot execute: required file not found."**
+Recovery attempt via `send-command --parameters commands=[<big_
+multiline_script>]` failed with exit 127 at the shebang. The
+script file the SSM agent wrote to disk had a valid shebang and
+LF endings, but AWS's wrapper apparently exec'd the file directly
+via a path where the shebang interpreter lookup failed (root
+cause not diagnosed). Working fix: base64-encode the script on the
+Mac, send a single-line command `echo <b64> | base64 -d | bash`.
+No file on disk, no shebang, no exec dance. **Lesson:** for any
+non-trivial SSM SendCommand payload, prefer base64+pipe over
+multi-line `commands` arrays — it's paste-safe, shebang-free, and
+avoids AWS's wrapper quirks entirely.
 
 **4. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
 Wanted to scope the deploy role's `GetCommandInvocation` to only
