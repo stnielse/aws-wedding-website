@@ -138,11 +138,13 @@ resource "aws_ssm_parameter" "aws_static_custom_domain" {
 # on the box -- no instance replace needed. The agent's fetch-config
 # subcommand knows the ssm: URI scheme natively.
 #
-# Shape:
-#   - files.collect_list -> nginx access/error logs from /var/log/nginx/.
-#   - journald -> gunicorn.service stderr, which carries JsonFormatter
-#     output. Django's ERROR/CRITICAL records get metric-filtered into
-#     the alarm defined in cloudwatch.tf.
+# All three streams come from files -- amazon-cloudwatch-agent 1.300
+# does not accept `journald` under logs.logs_collected (only files,
+# windows_events, emf), so gunicorn.service was switched from
+# StandardOutput=journal to append:/var/log/gunicorn/gunicorn.log in
+# gunicorn.service.tftpl. The agent tails that file, which carries
+# the same JsonFormatter output the Django ERROR/CRITICAL metric
+# filter (cloudwatch.tf) matches on.
 # --------------------------------------------------------------------------
 
 resource "aws_ssm_parameter" "cloudwatch_agent_config" {
@@ -173,16 +175,15 @@ resource "aws_ssm_parameter" "cloudwatch_agent_config" {
               retention_in_days = 30
               timezone          = "UTC"
             },
+            {
+              file_path         = "/var/log/gunicorn/gunicorn.log"
+              log_group_name    = aws_cloudwatch_log_group.django.name
+              log_stream_name   = "{instance_id}"
+              retention_in_days = 30
+              timezone          = "UTC"
+            },
           ]
         }
-        journald = [
-          {
-            log_group_name    = aws_cloudwatch_log_group.django.name
-            log_stream_name   = "{instance_id}"
-            retention_in_days = 30
-            units             = ["gunicorn.service"]
-          },
-        ]
       }
     }
   })

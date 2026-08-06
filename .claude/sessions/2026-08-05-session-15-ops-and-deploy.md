@@ -257,7 +257,31 @@ explicit design — don't just duplicate the build. Also: PR-triggered
 runs of ci.yml still don't upload anything (the input defaults to
 false), so PRs stay fast.
 
-**3. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
+**3. CloudWatch Agent doesn't accept `journald` under `logs.logs_collected`.**
+First draft of `ssm.tf`'s agent config had a `journald` block
+pointing at the `gunicorn.service` unit. Install succeeded on the
+running instance, but `amazon-cloudwatch-agent-ctl -a fetch-config`
+returned `Under path : /logs/logs_collected | Error : Additional
+property journald is not allowed` and the agent never started.
+amazon-cloudwatch-agent 1.300.x only supports `files`,
+`windows_events`, and `emf` under `logs_collected` — the "collect
+from systemd journal" feature I remembered doesn't actually exist
+in this codebase. Fix: switched `gunicorn.service.tftpl` from
+`StandardOutput=journal` to `StandardOutput=append:/var/log/
+gunicorn/gunicorn.log` (with `LogsDirectory=gunicorn` so systemd
+creates the dir owned by ec2-user at service start), added a
+matching `files` entry to the agent config, and added a
+`/etc/logrotate.d/gunicorn` drop-in (`copytruncate`, daily, keep
+14) so the file doesn't grow unbounded. **Lesson:** don't assume
+agent feature availability from memory — the schema is narrow, and
+the file-based path is the actually-supported one. Also: an
+overlooked knock-on is that the `gunicorn.service` template change
+doesn't apply to the running instance (per
+`user_data_replace_on_change = false`), so the recovery needed a
+manual `systemd unit rewrite + daemon-reload + restart` on the
+existing box in addition to the terraform apply.
+
+**4. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
 Wanted to scope the deploy role's `GetCommandInvocation` to only
 the wedding-site instance via a `ssm:resourceTag/Name` condition.
 Doesn't work — command-invocation resources aren't tagged the way

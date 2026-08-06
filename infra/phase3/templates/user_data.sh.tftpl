@@ -182,6 +182,28 @@ systemctl enable --now gunicorn
 systemctl enable --now nginx
 
 # --------------------------------------------------------------------------
+# logrotate for /var/log/gunicorn/gunicorn.log
+#
+# systemd's append: mode writes forever without rotating. copytruncate
+# lets logrotate reset the file in place without gunicorn needing to
+# reopen -- gunicorn keeps writing to the same fd, logrotate copies
+# the old content aside and truncates. Small trade-off: a couple of
+# log lines may be lost mid-copy, which is fine for access-style logs.
+# --------------------------------------------------------------------------
+cat > /etc/logrotate.d/gunicorn <<'LOGROTATEEOF'
+/var/log/gunicorn/gunicorn.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+LOGROTATEEOF
+chmod 0644 /etc/logrotate.d/gunicorn
+
+# --------------------------------------------------------------------------
 # Passwordless sudo for the deploy path.
 #
 # scripts/deploy.sh runs as ec2-user via SSM SendCommand and needs to
