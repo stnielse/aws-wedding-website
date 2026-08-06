@@ -147,3 +147,22 @@ output "cloudfront_hosted_zone_id" {
   value       = aws_cloudfront_distribution.web.hosted_zone_id
   description = "Hosted-zone ID CloudFront reports for alias records (always Z2FDTNDATAQYW2, but read from the resource so it stays authoritative)."
 }
+
+# --------------------------------------------------------------------------
+# CloudWatch + SNS (Session 15)
+# --------------------------------------------------------------------------
+
+output "django_log_group_name" {
+  value       = aws_cloudwatch_log_group.django.name
+  description = "CloudWatch log group receiving gunicorn+Django stderr via journald. Metric filter + alarm watch it."
+}
+
+output "django_errors_alarm_arn" {
+  value       = aws_cloudwatch_metric_alarm.django_errors.arn
+  description = "ARN of the ERROR/CRITICAL alarm on the Django log group."
+}
+
+output "django_errors_sns_topic_arn" {
+  value       = aws_sns_topic.django_errors.arn
+  description = "SNS topic ARN the alarm publishes to. Add more subscriptions manually or via terraform if a second recipient is needed."
+}
