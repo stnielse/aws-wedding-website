@@ -144,6 +144,17 @@ runuser -u ec2-user -- /tmp/bootstrap-app.sh \
 rm -f /tmp/bootstrap-app.sh
 
 # --------------------------------------------------------------------------
+# /var/log/gunicorn: pre-created explicitly because systemd's
+# LogsDirectory= in the unit is not reliable enough to depend on --
+# StandardOutput=append:/var/log/gunicorn/gunicorn.log opens the file
+# in pre-exec setup, and if the directory isn't there yet the service
+# fails with "Failed at step STDOUT ... No such file or directory"
+# (exit 209/STDOUT), restart-loops, and never comes up. See Session 15
+# digression 3b.
+# --------------------------------------------------------------------------
+install -d -o ec2-user -g ec2-user -m 0755 /var/log/gunicorn
+
+# --------------------------------------------------------------------------
 # systemd unit for gunicorn
 # --------------------------------------------------------------------------
 cat > /etc/systemd/system/gunicorn.service <<'GUNICORNEOF'
