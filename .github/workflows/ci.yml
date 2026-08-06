@@ -21,6 +21,16 @@ on:
   push:
   pull_request:
   workflow_call:
+    inputs:
+      upload_artifact:
+        description: >-
+          When true, the frontend job also uploads the built
+          backend/static/frontend/ tree as a GitHub Actions artifact
+          named "frontend-dist". deploy.yml sets this true so it can
+          download the artifact and ship to S3 without rebuilding.
+        type: boolean
+        default: false
+        required: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -87,3 +97,12 @@ jobs:
       - name: Build
         working-directory: frontend
         run: pnpm build
+
+      - name: Upload build artifact for downstream deploy
+        if: ${{ inputs.upload_artifact }}
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: frontend-dist
+          path: backend/static/frontend/
+          if-no-files-found: error
+          retention-days: 7

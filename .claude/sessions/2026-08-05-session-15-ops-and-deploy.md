@@ -179,6 +179,13 @@ prep for the real wedding date).
 | Choice | Refactor `.github/workflows/ci.yml` to expose its `python` + `frontend` jobs via `on: workflow_call:`. `deploy.yml` declares `jobs.ci: uses: ./.github/workflows/ci.yml`, then `jobs.deploy: needs: [ci]` proceeds only when both pass. |
 | Why | One test/lint definition, one source of truth. Alternatives were: (a) copy-paste — drift risk; (b) trust that branch protection already ran ci — skips revalidation on `workflow_dispatch` and doesn't cover a direct-to-main push if bypass ever fires. Reusable workflows are a first-class GitHub Actions feature; the refactor is a two-line addition. |
 
+### Frontend build runs exactly once per deploy; artifact flows via GHA upload/download
+
+| Area | Decision |
+|---|---|
+| Choice | `ci.yml` frontend job takes a `workflow_call` boolean input `upload_artifact` (default false). When true, the job uploads `backend/static/frontend/` as a GHA artifact named `frontend-dist` (retention 7d). `deploy.yml` calls ci.yml with `upload_artifact: true`, then a single `deploy` job downloads the artifact, tars it, ships to S3, and fires SSM SendCommand. |
+| Why | Naive approach was to have deploy.yml re-run `pnpm build` after `ci` reported green — that pays for the build twice per deploy (~10s each). Alternatives considered: (a) drop `pnpm build` from ci.yml entirely — loses PR-time regression detection; (b) fold the S3 upload into ci.yml — mixes CI verification concerns with deploy-specific AWS knowledge (S3 bucket, OIDC role). The GHA-artifact hand-off keeps ci.yml purely about verification (with an optional side effect gated by the caller) and keeps AWS specifics in deploy.yml. PR-triggered CI runs still don't upload anything — the `if: ${{ inputs.upload_artifact }}` guard means the extra step only fires when deploy calls it. |
+
 ### First-boot and deploy stay on separate code paths
 
 | Area | Decision |
