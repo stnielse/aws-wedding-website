@@ -75,6 +75,16 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# --- Managed policy: CloudWatchAgentServerPolicy (Session 15) ------------
+# Grants the CloudWatch Agent permission to create log streams + put log
+# events into any log group. Log group creation is Terraform-managed
+# (see cloudwatch.tf), so the agent only needs writes. AWS's managed
+# policy is the standard grant for this and lets us skip a bespoke doc.
+resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_agent" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 # --- Instance profile (what actually attaches to the EC2 instance) -------
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_tag}-ec2"
