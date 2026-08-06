@@ -17,8 +17,20 @@
 
 name: ci
 
+# Triggers:
+#   pull_request   fires on every PR event (open, synchronize, reopen).
+#                  This is the check branch protection on main requires.
+#   workflow_call  lets deploy.yml re-run the same jobs before shipping
+#                  on push-to-main. The check names inside a
+#                  workflow_call run are prefixed with the caller job
+#                  ID (deploy / ci / python), so they don't collide
+#                  with the PR-triggered "ci / python" checks.
+#
+# NOTE: no `push` trigger. Having both `push` and `pull_request` would
+# make every commit on a PR branch run ci twice, and would give both
+# runs a "(push)" / "(pull_request)" suffix that branch protection's
+# required-check name (`ci / python`) wouldn't match.
 on:
-  push:
   pull_request:
   workflow_call:
     inputs:

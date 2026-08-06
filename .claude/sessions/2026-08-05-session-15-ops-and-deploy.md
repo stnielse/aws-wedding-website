@@ -310,6 +310,24 @@ non-trivial SSM SendCommand payload, prefer base64+pipe over
 multi-line `commands` arrays — it's paste-safe, shebang-free, and
 avoids AWS's wrapper quirks entirely.
 
+**3d. Branch protection required checks never satisfied due to trigger-suffix collision.**
+Initial `ci.yml` had `on: [push, pull_request, workflow_call]`.
+On every push to a PR branch, GitHub fired ci twice (once per
+event) and disambiguated the check names by appending
+`(push)` / `(pull_request)` — so the actual check runs were named
+`ci / python (push)` and `ci / python (pull_request)`. Branch
+protection required `ci / python` (no suffix), which never
+appeared, so PRs stayed pending "Expected — Waiting for status to
+be reported" indefinitely. Fix: drop `on: push` from ci.yml so
+only one event ever triggers per PR, which removes the suffix and
+makes the check names match branch protection's expectation.
+`workflow_call` stayed (deploy.yml still reuses ci.yml on push to
+main). **Lesson:** when the same workflow can be triggered by
+multiple events on the same ref, GitHub disambiguates check names
+by tacking the event on — and branch protection's required-check
+selector matches the exact name, suffix included. Pick one PR-time
+trigger and stick with it.
+
 **4. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
 Wanted to scope the deploy role's `GetCommandInvocation` to only
 the wedding-site instance via a `ssm:resourceTag/Name` condition.
