@@ -1,0 +1,92 @@
+# PR-time verification for the wedding-site repo.
+#
+# Two parallel jobs, same shape as deploy.yml's python + frontend
+# jobs but without the artifact-upload side effect (there's nothing
+# to ship from a PR).
+#
+# Single `on: pull_request` trigger by design. Any additional `on:`
+# entry makes GitHub tack the trigger event onto every check-run
+# name (e.g. "pr-checks / python (pull_request)"), and the ruleset
+# picker doesn't populate those suffixed variants -- branch
+# protection ends up with a required check nobody produces.
+# Splitting the workflow into per-trigger files is the workaround
+# on Pro plans (rulesets' "Require workflows to succeed" rule is
+# Enterprise-only). Cost: python + frontend job definitions are
+# duplicated in deploy.yml; keep them in sync.
+#
+# Node 22 (not 20) because frontend/package.json pins pnpm@11.17.0
+# and pnpm 11 requires Node >= 22.13. Matches the AL2023 install in
+# infra/phase3/templates/user_data.sh.tftpl.
+#
+# Actions pinned to exact release tags per [[feedback-strict-version-pins]].
+
+name: pr-checks
+
+on:
+  pull_request:
+
+concurrency:
+  group: pr-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: python
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements/base.txt
+            backend/requirements/production.txt
+            backend/requirements/local.txt
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            -r backend/requirements/production.txt \
+            -r backend/requirements/local.txt
+
+      - name: Ruff check
+        run: ruff check backend/
+
+      - name: Ruff format check
+        run: ruff format --check backend/
+
+      - name: Django tests
+        working-directory: backend
+        run: python manage.py test --verbosity=2
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4.1.0
+        with:
+          node-version: '22'
+
+      - name: Enable corepack (pnpm 11.17.0 pinned in package.json)
+        run: corepack enable
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm build

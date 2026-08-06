@@ -311,24 +311,34 @@ multi-line `commands` arrays — it's paste-safe, shebang-free, and
 avoids AWS's wrapper quirks entirely.
 
 **3d. Branch protection required checks never satisfied due to trigger-suffix collision.**
-Initial `ci.yml` had `on: [push, pull_request, workflow_call]`.
-On every push to a PR branch, GitHub fired ci twice (once per
-event) AND appended a `(push)` / `(pull_request)` suffix to the
-check names. First attempted fix: drop `on: push` so only
-`pull_request` fires — expected the suffix to go away. It didn't.
-Turns out GitHub adds the event suffix whenever a workflow has
-*multiple* `on:` triggers *configured*, even if only one fires
-per run. Since `on: workflow_call` (kept so deploy.yml can reuse
-ci.yml) counts, the suffix stays. Real fix: leave ci.yml as-is
-and update branch protection to require the actual names GitHub
-produces — `ci / python (pull_request)` and
-`ci / frontend (pull_request)`. **Lesson:** the trigger-event
-suffix is a property of the workflow config, not the specific run.
-Multiple `on:` entries → always suffixed. Only workarounds are (a)
-match branch protection to the suffixed name, or (b) split the
-workflow into two files (one `on: pull_request`, one
-`on: workflow_call`) both calling a common set of reusable jobs.
-Chose (a) — fewer files.
+Full odyssey. Initial `ci.yml` had `on: [push, pull_request,
+workflow_call]`. Every push to a PR branch fired ci twice (once
+per event) AND appended a `(push)` / `(pull_request)` suffix to
+the check names. Branch protection required `ci / python` (no
+suffix), which never appeared. First attempted fix: drop
+`on: push` so only `pull_request` fires — suffix stays because
+`workflow_call` still counts as a second configured trigger.
+Second attempted fix: update branch protection to require
+`ci / python (pull_request)` — the ruleset UI accepts the typed
+string but the required check never reconciles against the
+actual check runs (either GitHub-side validation binds required
+checks to picker-listed names only, or an invisible-char paste
+issue). "Require workflows to succeed" (which matches by workflow
+file path, not check name) is Enterprise-only, not available on
+Pro. Actual fix: split `ci.yml` into two single-trigger files —
+`pr-checks.yml` (`on: pull_request` only, plain python +
+frontend jobs) and `deploy.yml` (own inlined python + frontend
+jobs + deploy job, `on: push:main + workflow_dispatch` only).
+Neither file has multiple `on:` triggers, so no suffix on either.
+`ci.yml` is deleted; branch protection requires `pr-checks /
+python` and `pr-checks / frontend` (populated from the picker).
+Cost: ~50 lines of duplicated YAML between pr-checks.yml and
+deploy.yml. **Lesson:** on Pro plans, don't reuse a single
+workflow file across multiple trigger types via `workflow_call`
+when any of those triggers need to satisfy branch protection —
+the suffix collision is unavoidable and GitHub's ruleset UI
+won't reconcile manually-typed suffixed names. Two thin single-
+trigger files with duplicated jobs are pragmatic.
 
 **4. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
 Wanted to scope the deploy role's `GetCommandInvocation` to only
@@ -361,14 +371,11 @@ git write ops per [[feedback-git-operations]], nor long-running
     - Required approvals: `0` (solo project, keeps the PR workflow)
     - Require conversation resolution before merging
   - Require status checks to pass
-    - Select the two CI job names once they've reported at least once
-      on a PR: **`ci / python (pull_request)`** and
-      **`ci / frontend (pull_request)`**. GitHub tacks the trigger
-      event onto the check name whenever a workflow has multiple
-      `on:` triggers configured (ci.yml has `pull_request` +
-      `workflow_call`), so the suffix is unavoidable short of
-      splitting the workflow into two files. Match branch protection
-      to what GitHub actually produces.
+    - Select the two check names from the picker once they've
+      reported at least once on a PR:
+      **`pr-checks / python`** and **`pr-checks / frontend`**.
+      No event suffix — both come from `pr-checks.yml`, which has
+      a single `on: pull_request` trigger.
     - Require branches to be up to date before merging
 - **Bypass list:** add `stnielse` as Role: Repository admin, Mode:
   Always. Emergency direct-push valve; every other push goes through
@@ -447,14 +454,15 @@ show up in whatever page has a git-sha footer (or via SSM
 
 **Created:**
 - `.claude/sessions/2026-08-05-session-15-ops-and-deploy.md` — this log
-- `.github/workflows/deploy.yml`
+- `.github/workflows/pr-checks.yml` (single-trigger on: pull_request; python + frontend jobs)
+- `.github/workflows/deploy.yml` (single-trigger on: push:main + workflow_dispatch; python + frontend + deploy jobs, self-contained)
 - `infra/phase3/cloudwatch.tf`
 - `infra/phase3/oidc.tf`
 - `scripts/deploy.sh`
 - `scripts/cleanup_static_bucket_root.py`
 
-**Modified:**
-- `.github/workflows/ci.yml` (Node 22, workflow_call trigger, optional artifact upload)
+**Deleted:**
+- `.github/workflows/ci.yml` (superseded by pr-checks.yml + inlined deploy.yml jobs — see digression 3d for the reason)
 - `infra/phase3/variables.tf` (added `alert_email`, `github_repository`)
 - `infra/phase3/terraform.tfvars.example` (documented the two new vars)
 - `infra/phase3/outputs.tf` (CloudWatch, SNS, github-deploy role outputs)
