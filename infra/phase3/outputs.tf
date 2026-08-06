@@ -166,3 +166,12 @@ output "django_errors_sns_topic_arn" {
   value       = aws_sns_topic.django_errors.arn
   description = "SNS topic ARN the alarm publishes to. Add more subscriptions manually or via terraform if a second recipient is needed."
 }
+
+# --------------------------------------------------------------------------
+# GitHub OIDC deploy role (Session 15)
+# --------------------------------------------------------------------------
+
+output "github_deploy_role_arn" {
+  value       = aws_iam_role.github_deploy.arn
+  description = "ARN of the IAM role GitHub Actions assumes via OIDC. Set as GITHUB_DEPLOY_ROLE_ARN in .github/workflows/deploy.yml (via secrets or vars)."
+}
