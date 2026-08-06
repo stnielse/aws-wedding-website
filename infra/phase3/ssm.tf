@@ -129,3 +129,61 @@ resource "aws_ssm_parameter" "aws_static_custom_domain" {
   type        = "String"
   value       = var.domain_name
 }
+
+# --------------------------------------------------------------------------
+# CloudWatch Agent config (Session 15).
+#
+# Stored in SSM so tweaking what the agent tails is a terraform apply +
+# one SSM SendCommand ("amazon-cloudwatch-agent-ctl -a fetch-config -s")
+# on the box -- no instance replace needed. The agent's fetch-config
+# subcommand knows the ssm: URI scheme natively.
+#
+# Shape:
+#   - files.collect_list -> nginx access/error logs from /var/log/nginx/.
+#   - journald -> gunicorn.service stderr, which carries JsonFormatter
+#     output. Django's ERROR/CRITICAL records get metric-filtered into
+#     the alarm defined in cloudwatch.tf.
+# --------------------------------------------------------------------------
+
+resource "aws_ssm_parameter" "cloudwatch_agent_config" {
+  name        = "${local.ssm_prefix}/CLOUDWATCH_AGENT_CONFIG"
+  description = "JSON config for amazon-cloudwatch-agent on the EC2 web tier. Fetched with 'amazon-cloudwatch-agent-ctl -a fetch-config -s -c ssm:<this-param-name>'."
+  type        = "String"
+  tier        = "Standard"
+
+  value = jsonencode({
+    agent = {
+      run_as_user = "root"
+    }
+    logs = {
+      logs_collected = {
+        files = {
+          collect_list = [
+            {
+              file_path         = "/var/log/nginx/access.log"
+              log_group_name    = aws_cloudwatch_log_group.nginx_access.name
+              log_stream_name   = "{instance_id}"
+              retention_in_days = 30
+              timezone          = "UTC"
+            },
+            {
+              file_path         = "/var/log/nginx/error.log"
+              log_group_name    = aws_cloudwatch_log_group.nginx_error.name
+              log_stream_name   = "{instance_id}"
+              retention_in_days = 30
+              timezone          = "UTC"
+            },
+          ]
+        }
+        journald = [
+          {
+            log_group_name    = aws_cloudwatch_log_group.django.name
+            log_stream_name   = "{instance_id}"
+            retention_in_days = 30
+            units             = ["gunicorn.service"]
+          },
+        ]
+      }
+    }
+  })
+}
