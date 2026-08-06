@@ -5,10 +5,13 @@
 # `pnpm lint` in frontend/package.json) and a full production build to
 # catch any Vite/rollup-time regressions.
 #
-# Deploy is a separate workflow (Session 15) — this one does not touch
-# AWS credentials, does not gate merges (branch protection lands in
-# Session 14), and cancels in-progress runs on the same ref so pushes
-# don't queue up behind superseded commits.
+# Also exposed as a reusable workflow (`workflow_call`) so
+# `deploy.yml` can rerun lint + tests before touching the instance
+# without duplicating the job definitions here.
+#
+# Node 22 (not 20) because frontend/package.json pins pnpm@11.17.0
+# and pnpm 11 requires Node >= 22.13. Matches the AL2023 install in
+# infra/phase3/templates/user_data.sh.tftpl.
 #
 # Actions pinned to exact release tags per [[feedback-strict-version-pins]].
 
@@ -17,6 +20,7 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -64,10 +68,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4.1.0
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Enable corepack (pnpm 11.17.0 pinned in package.json)
         run: corepack enable
