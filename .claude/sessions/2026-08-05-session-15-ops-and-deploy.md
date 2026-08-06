@@ -204,32 +204,67 @@ prep for the real wedding date).
 
 ## Progress
 
-- [ ] Session log created (this file).
-- [ ] `.github/workflows/ci.yml` — Node bump 20 → 22.
-- [ ] Branch protection instructions drafted for user.
-- [ ] `infra/phase3/cloudwatch.tf` — log groups + metric filter + alarm + SNS topic.
-- [ ] `infra/phase3/ssm.tf` — CLOUDWATCH_AGENT_CONFIG param.
-- [ ] `infra/phase3/ec2_iam.tf` — CloudWatchAgentServerPolicy attached.
-- [ ] `infra/phase3/templates/user_data.sh.tftpl` — agent install + fetch-config.
-- [ ] `infra/phase3/oidc.tf` — OIDC provider + github-deploy role.
-- [ ] `.github/workflows/ci.yml` — add `workflow_call:` trigger so deploy can reuse.
-- [ ] `.github/workflows/deploy.yml` — full three-job workflow (ci → frontend → deploy).
-- [ ] `scripts/deploy.sh` — EC2 deploy script (deploy-only, no first-boot overlap).
-- [ ] `backend/config/settings/production.py` — HSTS 60s.
-- [ ] `backend/config/tests.py` — HSTS test.
-- [ ] `scripts/cleanup_static_bucket_root.py` — dry-run + confirm + delete.
-- [ ] `terraform validate` + `fmt -diff` + non-ASCII grep clean.
-- [ ] Django test suite green.
+- [x] Session log created (this file).
+- [x] `.github/workflows/ci.yml` — Node bump 20 → 22, `workflow_call:` trigger, `upload_artifact` input + optional artifact upload.
+- [x] Branch protection instructions drafted (see User execution checklist below).
+- [x] `infra/phase3/cloudwatch.tf` — 3 log groups + metric filter + alarm + SNS topic + email subscription.
+- [x] `infra/phase3/ssm.tf` — CLOUDWATCH_AGENT_CONFIG param (files: nginx access/error + journald: gunicorn.service).
+- [x] `infra/phase3/ec2_iam.tf` — CloudWatchAgentServerPolicy attached to EC2 role.
+- [x] `infra/phase3/templates/user_data.sh.tftpl` — agent install + fetch-config + passwordless sudo for `systemctl restart gunicorn`.
+- [x] `infra/phase3/oidc.tf` — OIDC provider + github-deploy role scoped to `refs/heads/main`.
+- [x] `infra/phase3/variables.tf` + `terraform.tfvars.example` — new `alert_email` and `github_repository` variables.
+- [x] `infra/phase3/outputs.tf` — CloudWatch + SNS + github-deploy role outputs.
+- [x] `.github/workflows/deploy.yml` — two-job workflow (ci via workflow_call → deploy: download artifact → tar → S3 → SSM SendCommand → poll → surface output).
+- [x] `scripts/deploy.sh` — EC2 deploy script (deploy-only, no first-boot overlap).
+- [x] `backend/config/settings/production.py` — `SECURE_HSTS_SECONDS = 60`.
+- [x] `backend/config/tests.py` — HSTS test.
+- [x] `scripts/cleanup_static_bucket_root.py` — dry-run default + `--yes` confirm + batched delete.
+- [x] `terraform validate` clean; `fmt` applied; non-ASCII grep only hits pre-existing em-dash in a Terraform *output* description (not an AWS resource description — same tolerance as Session 14).
+- [x] Django test suite green — 56 tests, ok (55 baseline + 1 new HSTS test).
 - [ ] User: `terraform plan` + `apply` in phase 3.
+- [ ] User: set the 3 GitHub Actions repo variables (`AWS_DEPLOY_ROLE_ARN`, `STATIC_BUCKET_NAME`, `EC2_INSTANCE_ID`) from the terraform outputs.
+- [ ] User: install `amazon-cloudwatch-agent` on the existing instance via SSM Session Manager (see checklist).
 - [ ] User: branch protection UI steps.
 - [ ] User: SNS subscription confirmation.
 - [ ] User: static bucket cleanup script run.
 - [ ] User: commit + push to trigger first automated deploy — verify.
-- [ ] Session log finalized.
+- [x] Session log finalized.
 
 ## Digressions worth remembering
 
-*(Filled in during execution.)*
+**1. CI was broken since Session 14 merge (Node 20 vs. pnpm 11 mismatch).**
+User surfaced this at session start: `frontend` job in `ci.yml`
+pinned `node-version: '20'`, but `frontend/package.json` sets
+`packageManager: pnpm@11.17.0`, and pnpm 11 requires Node ≥ 22.13
+— so `pnpm install --frozen-lockfile` failed on every CI run. Fix
+was a one-line bump to `'22'`. **Lesson:** when a project pins
+`packageManager` in `package.json`, the CI Node version pin has to
+be compatible or install will fail cryptically. Worth grepping
+`packageManager` in `package.json` before pinning Node in any new
+workflow, and worth revisiting whenever the pnpm major bumps.
+
+**2. Deploy workflow's frontend duplication → single-build refactor mid-write.**
+First draft of `deploy.yml` had its own frontend build job — CI
+would build (for verification), then deploy would build again (for
+the artifact). User caught the asymmetry and asked why. Turned out
+Options B (upload-artifact from ci.yml → download-artifact in
+deploy.yml) was cleanly reachable: `ci.yml` grew a `workflow_call`
+input `upload_artifact` (default false), guarded the upload step
+behind it, and `deploy.yml` collapsed to a single `deploy` job.
+**Lesson:** when a "reusable workflow" plus a "deploy workflow"
+both need the same build output, the artifact-flow question deserves
+explicit design — don't just duplicate the build. Also: PR-triggered
+runs of ci.yml still don't upload anything (the input defaults to
+false), so PRs stay fast.
+
+**3. `ssm:GetCommandInvocation` can't be resource-tag-scoped.**
+Wanted to scope the deploy role's `GetCommandInvocation` to only
+the wedding-site instance via a `ssm:resourceTag/Name` condition.
+Doesn't work — command-invocation resources aren't tagged the way
+EC2 instances are, so the condition wouldn't match and every call
+would fail. Ended up with `Resource: *` and a comment noting the
+role's trust policy (main-branch-of-this-repo only) is the actual
+scoping mechanism.
 
 ---
 
@@ -307,7 +342,19 @@ cd /Users/stevennielsen/aws-wedding-website
 .venv/bin/python scripts/cleanup_static_bucket_root.py --yes
 ```
 
-### 5 — Commit + push to trigger first automated deploy
+### 5 — Set GitHub Actions repo variables
+
+Populate from `terraform -chdir=infra/phase3 output`:
+
+- `AWS_DEPLOY_ROLE_ARN` ← `github_deploy_role_arn`
+- `STATIC_BUCKET_NAME`  ← `static_bucket_name`
+- `EC2_INSTANCE_ID`     ← `ec2_instance_id`
+
+Settings → Secrets and variables → Actions → Variables → New
+repository variable. All three are **plaintext variables** (not
+secrets). The deploy workflow reads them via `${{ vars.NAME }}`.
+
+### 6 — Commit + push to trigger first automated deploy
 
 Stage everything from this session, commit, push to `main`.
 Watch the Actions tab: `deploy` workflow should trigger, `ci` jobs
@@ -322,14 +369,83 @@ show up in whatever page has a git-sha footer (or via SSM
 
 ## Files created / modified this session
 
-*(Filled in during execution.)*
-
 **Created:**
 - `.claude/sessions/2026-08-05-session-15-ops-and-deploy.md` — this log
+- `.github/workflows/deploy.yml`
+- `infra/phase3/cloudwatch.tf`
+- `infra/phase3/oidc.tf`
+- `scripts/deploy.sh`
+- `scripts/cleanup_static_bucket_root.py`
+
+**Modified:**
+- `.github/workflows/ci.yml` (Node 22, workflow_call trigger, optional artifact upload)
+- `infra/phase3/variables.tf` (added `alert_email`, `github_repository`)
+- `infra/phase3/terraform.tfvars.example` (documented the two new vars)
+- `infra/phase3/outputs.tf` (CloudWatch, SNS, github-deploy role outputs)
+- `infra/phase3/ssm.tf` (CLOUDWATCH_AGENT_CONFIG param)
+- `infra/phase3/ec2_iam.tf` (attach CloudWatchAgentServerPolicy)
+- `infra/phase3/templates/user_data.sh.tftpl` (agent install + fetch-config, passwordless sudo drop-in)
+- `backend/config/settings/production.py` (SECURE_HSTS_SECONDS = 60)
+- `backend/config/tests.py` (HSTS test)
+
+Per working contract, all `git add` / `git commit` is left to the
+user.
 
 ## Session 16 handoff
 
-*(Filled in during execution.)*
+Session 16 = **HSTS full ramp + RDS deletion protection + real
+gallery page + any launch-checklist prep.** Ordered by risk/urgency:
+
+### Step 1 — HSTS ramp (assuming Session 15's 60s soak is clean)
+
+If two weeks of green deploys + healthy alarm output have gone by
+without any HTTPS regression:
+
+1. `SECURE_HSTS_SECONDS = 3600` — one-hour commitment. Push,
+   verify browsers pin correctly.
+2. `SECURE_HSTS_SECONDS = 604800` — one week.
+3. `SECURE_HSTS_SECONDS = 31536000` + `SECURE_HSTS_INCLUDE_SUBDOMAINS = True`.
+4. Optionally add `SECURE_HSTS_PRELOAD = True` and submit the
+   domain to https://hstspreload.org (irreversible for the
+   preload list — only do this once the wedding is over or
+   you're 100% committed to HTTPS forever on this domain).
+
+Each step just needs a settings change + push (the deploy workflow
+handles the rest). Update `test_hsts_seconds_set_to_soak_value` at
+each ramp so the test is a real assertion.
+
+### Step 2 — RDS deletion protection
+
+`aws_db_instance.wedding` has `deletion_protection = false` today
+(so tearing down phase 3 in dev is easy). Once we're closer to the
+wedding (Session 14+15 handoffs said "flip pre-wedding"), flip to
+`true`. A `terraform apply` with only that change is safe and
+non-disruptive.
+
+### Step 3 — Real gallery page
+
+Session 9 landed the home-page photo strip. The real gallery view
+(Session 8's `Gallery` React island against `/api/photos/`) is
+still stubbed. Design + implement.
+
+### Step 4 — Launch checklist
+
+Compile from prior sessions' notes: create a prod Django superuser
+via SSM (Session 14 lesson), verify SNS confirmation, verify HSTS,
+verify branch protection enforcement, verify deploy workflow end-
+to-end from a real push. Draft as `.claude/launch-checklist.md`.
+
+### Step 5 — Post-deploy CloudFront invalidation (optional)
+
+`deploy.sh` doesn't create a CloudFront invalidation today. Since
+static assets are hashed by `ManifestS3StaticStorage`, an
+invalidation isn't strictly required — new deploys ship new
+filenames and the templates reference them. But `/index.html` and
+Django-rendered HTML pages *are* dynamic (from the EC2 origin,
+`CachingDisabled`), so they're never cached either. The only case
+that would benefit from invalidation is if we ever cache the
+default behavior, which we don't. Skip unless caching strategy
+changes.
 
 ## Open questions / follow-ups
 
