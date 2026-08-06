@@ -82,27 +82,21 @@ prep for the real wedding date).
 6. **Deploy workflow** — `.github/workflows/deploy.yml`.
    - `on: push: branches: [main]`, plus
      `workflow_dispatch:` so we can trigger a redeploy manually.
-   - Three jobs: `python` (reuses ci.yml's lint+test shape, so we
-     never deploy a broken tree), `frontend` (Node 22 build →
-     `tar czf dist.tar.gz -C frontend/dist .` → S3 put via OIDC),
-     `deploy` (needs: [python, frontend], SSM SendCommand → poll for
-     completion, fail on non-zero).
-7. **EC2 deploy script + bootstrap refactor.**
-   - `scripts/deploy.sh` (repo-tracked, runs as `ec2-user`): args
-     `<git_sha> <artifact_s3_url>`, does `git fetch origin && git
-     checkout <sha>`, pip install (in case requirements changed),
-     downloads + extracts the frontend tarball to
-     `backend/static/frontend/`, runs `migrate` + `collectstatic`,
-     `sudo systemctl restart gunicorn`.
-   - `user_data.sh.tftpl` refactored to call `scripts/deploy.sh`
-     after the initial clone so first-boot and subsequent deploys
-     share the same code path. The Node/pnpm install stays in
-     `user_data.sh.tftpl` because it's a system-level (root) install
-     that only needs to happen once per instance, not per deploy.
-     **Frontend build step in `user_data.sh.tftpl` is removed** — on
-     first boot we'll do a one-off `pnpm build` locally on the
-     instance because there's no CI artifact yet, then all
-     subsequent deploys pull the CI-built tarball.
+   - `ci` job: `uses: ./.github/workflows/ci.yml` — reruns lint +
+     tests through the reusable workflow so we never deploy a broken
+     tree.
+   - `frontend` job: Node 22 build →
+     `tar czf dist.tar.gz -C frontend/dist .` → S3 put via OIDC.
+   - `deploy` job: `needs: [ci, frontend]`, SSM SendCommand → poll
+     for completion, fail on non-zero.
+7. **EC2 deploy script (deploy-only).**
+   `scripts/deploy.sh` (repo-tracked, runs as `ec2-user` via SSM):
+   args `<git_sha> <artifact_s3_url>`, does `git fetch origin && git
+   checkout <sha>`, pip install (in case requirements changed),
+   downloads + extracts the frontend tarball to
+   `backend/static/frontend/`, runs `migrate` + `collectstatic`,
+   `sudo systemctl restart gunicorn`. **Does not** duplicate the
+   first-boot flow — user_data still owns fresh-instance bring-up.
 8. **HSTS ramp — short soak.** Add
    `SECURE_HSTS_SECONDS = 60` to `backend/config/settings/
    production.py`. Sixty seconds is short enough that a botched
@@ -178,6 +172,20 @@ prep for the real wedding date).
 | Choice | `SECURE_HSTS_SECONDS = 60`. No INCLUDE_SUBDOMAINS, no PRELOAD. |
 | Why | HSTS is one-way: browsers pin the header for `max_age`. Sixty seconds means any HTTPS breakage recovers in a minute, but we're exercising the actual code path. Session 16 ramps to a year once we've soaked without incident. |
 
+### `ci.yml` becomes reusable; `deploy.yml` calls it via `workflow_call`
+
+| Area | Decision |
+|---|---|
+| Choice | Refactor `.github/workflows/ci.yml` to expose its `python` + `frontend` jobs via `on: workflow_call:`. `deploy.yml` declares `jobs.ci: uses: ./.github/workflows/ci.yml`, then `jobs.deploy: needs: [ci]` proceeds only when both pass. |
+| Why | One test/lint definition, one source of truth. Alternatives were: (a) copy-paste — drift risk; (b) trust that branch protection already ran ci — skips revalidation on `workflow_dispatch` and doesn't cover a direct-to-main push if bypass ever fires. Reusable workflows are a first-class GitHub Actions feature; the refactor is a two-line addition. |
+
+### First-boot and deploy stay on separate code paths
+
+| Area | Decision |
+|---|---|
+| Choice | `scripts/deploy.sh` is deploy-only — assumes venv + git clone already exist, downloads the frontend tarball, runs migrate + collectstatic + restart. `user_data.sh.tftpl` keeps its inline first-boot app-tier flow (clone, pip install, local `pnpm build`, migrate, collectstatic, start systemd units) unchanged in shape — only the CloudWatch Agent install gets added. |
+| Why | First boot happens ~2× in the site's whole life; deploys happen ~50–100×. Optimizing the frequent path to be simple and standalone (no "no artifact URL → build locally" branch, no dual invocation context) matters more than deduplicating three lines of migrate/collectstatic/restart. Shared-script complexity pays off in high-churn systems with many environments — not here. |
+
 ### Static bucket cleanup is user-run, not CI-run
 
 | Area | Decision |
@@ -197,9 +205,9 @@ prep for the real wedding date).
 - [ ] `infra/phase3/ec2_iam.tf` — CloudWatchAgentServerPolicy attached.
 - [ ] `infra/phase3/templates/user_data.sh.tftpl` — agent install + fetch-config.
 - [ ] `infra/phase3/oidc.tf` — OIDC provider + github-deploy role.
-- [ ] `.github/workflows/deploy.yml` — full three-job workflow.
-- [ ] `scripts/deploy.sh` — EC2 deploy script.
-- [ ] `infra/phase3/templates/user_data.sh.tftpl` — refactor to call deploy.sh for first-boot too.
+- [ ] `.github/workflows/ci.yml` — add `workflow_call:` trigger so deploy can reuse.
+- [ ] `.github/workflows/deploy.yml` — full three-job workflow (ci → frontend → deploy).
+- [ ] `scripts/deploy.sh` — EC2 deploy script (deploy-only, no first-boot overlap).
 - [ ] `backend/config/settings/production.py` — HSTS 60s.
 - [ ] `backend/config/tests.py` — HSTS test.
 - [ ] `scripts/cleanup_static_bucket_root.py` — dry-run + confirm + delete.
