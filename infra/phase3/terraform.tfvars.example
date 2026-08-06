@@ -27,3 +27,13 @@ acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/REPLACE-ME
 # Same ID phase 0 uses; Session 14 imports the existing apex+www records
 # into phase 3 state.
 hosted_zone_id = "Z000000000REPLACEME"
+
+# REQUIRED (Session 15+). Email address that receives CloudWatch alarm
+# notifications (Django ERROR/CRITICAL). SNS sends a confirmation link
+# to this address on first apply.
+alert_email = "you@example.com"
+
+# REQUIRED (Session 15+). GitHub repository (owner/name) whose Actions
+# workflow is allowed to assume the deploy IAM role. Scoped further to
+# ref:refs/heads/main inside the trust policy.
+github_repository = "OWNER/REPO"
