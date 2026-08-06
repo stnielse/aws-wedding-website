@@ -182,6 +182,19 @@ systemctl enable --now gunicorn
 systemctl enable --now nginx
 
 # --------------------------------------------------------------------------
+# Passwordless sudo for the deploy path.
+#
+# scripts/deploy.sh runs as ec2-user via SSM SendCommand and needs to
+# restart gunicorn after every push-to-main. NOPASSWD is scoped to
+# exactly that command -- ec2-user cannot sudo anything else.
+# --------------------------------------------------------------------------
+cat > /etc/sudoers.d/wedding-site-deploy <<'SUDOERSEOF'
+ec2-user ALL=(root) NOPASSWD: /bin/systemctl restart gunicorn
+SUDOERSEOF
+chmod 0440 /etc/sudoers.d/wedding-site-deploy
+visudo -c -f /etc/sudoers.d/wedding-site-deploy
+
+# --------------------------------------------------------------------------
 # CloudWatch Agent: fetch config from SSM and start.
 #
 # The agent's fetch-config subcommand knows the ssm: URI scheme
