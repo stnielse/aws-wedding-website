@@ -182,10 +182,22 @@ systemctl enable --now gunicorn
 systemctl enable --now nginx
 
 # --------------------------------------------------------------------------
+# CloudWatch Agent: fetch config from SSM and start.
+#
+# The agent's fetch-config subcommand knows the ssm: URI scheme
+# natively. Config is defined in Terraform (infra/phase3/ssm.tf) and
+# tails nginx access + error logs plus the gunicorn journald unit.
+# --------------------------------------------------------------------------
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config -s -m ec2 \
+    -c ssm:${ssm_prefix}/CLOUDWATCH_AGENT_CONFIG
+
+# --------------------------------------------------------------------------
 # Post-flight sanity
 # --------------------------------------------------------------------------
 systemctl is-active gunicorn
 systemctl is-active nginx
+systemctl is-active amazon-cloudwatch-agent
 sleep 2
 curl -sI -o /dev/null -w "localhost: %%{http_code}\n" http://localhost/ || true
 
