@@ -226,6 +226,93 @@ prep for the real wedding date).
 
 ---
 
+## User execution checklist
+
+Steps the user runs at the end of the session (Claude does not run
+git write ops per [[feedback-git-operations]], nor long-running
+`terraform apply` per [[feedback-long-running-commands]]).
+
+### 1 — Branch protection on `main` (GitHub UI)
+
+**Settings → Rules → Rulesets → New branch ruleset:**
+
+- **Ruleset name:** `main-protected`
+- **Enforcement status:** Active
+- **Target branches:** Include default branch (`main` only)
+- **Rules to enable:**
+  - Restrict deletions
+  - Block force pushes
+  - Require a pull request before merging
+    - Required approvals: `0` (solo project, keeps the PR workflow)
+    - Require conversation resolution before merging
+  - Require status checks to pass
+    - Select the two CI job names once they've reported at least once
+      on a PR: **`ci / python`** and **`ci / frontend`** (the `ci /`
+      prefix comes from `deploy.yml` calling `ci.yml` via
+      `workflow_call`; check names show up in the picker as
+      `<caller-job-id> / <called-job-name>`).
+    - Require branches to be up to date before merging
+- **Bypass list:** add `stnielse` as Role: Repository admin, Mode:
+  Always. Emergency direct-push valve; every other push goes through
+  PR + CI.
+
+**Verify:** open a throwaway branch, push a whitespace-only commit
+to `main` directly → should be rejected. Open a real PR against
+`main`, confirm the two `ci / *` checks appear as "Required."
+
+### 2 — SSO login + `terraform apply` (phase 3)
+
+```
+aws sso login
+cd infra/phase3
+terraform plan -out=tfplan
+# review: expect ~10 new resources (log groups, SNS topic +
+# subscription, metric filter, alarm, OIDC provider, deploy role +
+# policy, ssm param for cw agent config), plus updates to
+# ec2_iam.tf (attach CloudWatchAgentServerPolicy) and user_data.
+terraform apply tfplan
+```
+
+The user_data changes trigger nothing on the running instance
+(`user_data_replace_on_change = false`). To install the CloudWatch
+Agent on the *existing* instance without waiting for the next
+replace, SSM Session Manager into the box and run:
+
+```
+sudo dnf -y install amazon-cloudwatch-agent
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -s -m ec2 \
+  -c ssm:/wedding-site/prod/CLOUDWATCH_AGENT_CONFIG
+```
+
+### 3 — SNS subscription confirmation
+
+Check `s.conwaynielsen@gmail.com` inbox for an "AWS Notification —
+Subscription Confirmation" email from `no-reply@sns.amazonaws.com`.
+Click the confirm link.
+
+### 4 — Static bucket root cleanup
+
+```
+cd /Users/stevennielsen/aws-wedding-website
+.venv/bin/python scripts/cleanup_static_bucket_root.py --dry-run
+# review the count (should list ~343 objects), then:
+.venv/bin/python scripts/cleanup_static_bucket_root.py --yes
+```
+
+### 5 — Commit + push to trigger first automated deploy
+
+Stage everything from this session, commit, push to `main`.
+Watch the Actions tab: `deploy` workflow should trigger, `ci` jobs
+pass, `frontend` uploads the tarball, `deploy` fires SSM SendCommand,
+waits for `Success`. Verify by hitting
+`https://kaitlynandsteventietheknot.com` — the new git SHA should
+show up in whatever page has a git-sha footer (or via SSM
+`aws ssm start-session ...` then `cd /home/ec2-user/aws-wedding-website
+&& git rev-parse HEAD`).
+
+---
+
 ## Files created / modified this session
 
 *(Filled in during execution.)*
