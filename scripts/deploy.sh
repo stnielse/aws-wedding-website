@@ -77,9 +77,13 @@ sudo /bin/systemctl restart gunicorn
 
 # ---- Post-flight sanity -------------------------------------------------
 # Give gunicorn a beat to bind the socket, then hit localhost through
-# nginx. 200 or 302 is healthy; anything else fails the deploy.
+# nginx. Passing `-H "Host: $DOMAIN"` is load-bearing: without it curl
+# sends Host=localhost, which ALLOWED_HOSTS rejects with 400 (Django's
+# CommonMiddleware fires before anything else). $DOMAIN comes from the
+# .env we sourced earlier and matches an entry in ALLOWED_HOSTS.
+# 200 or 301/302 is healthy; anything else fails the deploy.
 sleep 2
-status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/)
+status=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $DOMAIN" http://localhost/)
 case "$status" in
     200|301|302) ;;
     *)

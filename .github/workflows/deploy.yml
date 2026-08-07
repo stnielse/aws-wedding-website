@@ -177,8 +177,26 @@ jobs:
           # Build it with jq so the SHA + artifact URL are quoted
           # safely -- never string-interpolate untrusted input into
           # a raw JSON blob.
+          #
+          # Body has two `&&`-chained steps run as ec2-user:
+          #   1. Pre-guard -- `git fetch + git checkout --detach $SHA`
+          #      so the box's working tree matches the deploy SHA
+          #      BEFORE we try to exec scripts/deploy.sh. Self-heals
+          #      the "new file under scripts/ hasn't reached the box
+          #      yet" case (Session 15's first-deploy failure). The
+          #      pre-guard is intentionally redundant with deploy.sh's
+          #      own internal fetch/checkout -- that redundancy is
+          #      what makes the very first invocation on a stale
+          #      checkout survive.
+          #   2. scripts/deploy.sh -- unchanged, still owns the real
+          #      deploy work (pip install, tar extract, migrate,
+          #      collectstatic, restart, post-flight check).
+          #
+          # `set -e` inside the bash -c wrapping the pre-guard fails
+          # fast if fetch or checkout errors, so the deploy.sh step
+          # (chained with &&) doesn't run on a bad tree.
           COMMAND_BODY=$(jq -n \
-            --arg cmd "sudo -u ec2-user /home/ec2-user/aws-wedding-website/scripts/deploy.sh $SHA s3://$BUCKET/deploy/frontend-$SHA.tar.gz" \
+            --arg cmd "sudo -u ec2-user bash -c 'set -e; cd /home/ec2-user/aws-wedding-website; git fetch --prune origin; git checkout --detach $SHA' && sudo -u ec2-user /home/ec2-user/aws-wedding-website/scripts/deploy.sh $SHA s3://$BUCKET/deploy/frontend-$SHA.tar.gz" \
             '{commands: [$cmd]}')
           command_id=$(aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
