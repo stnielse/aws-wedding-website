@@ -133,6 +133,55 @@ aws rds describe-db-instances \
 Actual DB connectivity is tested from EC2 in Session 12 (first
 `manage.py migrate` is the end-to-end proof).
 
+## RDS deletion protection — deferred flip (decision)
+
+**Current state (build phase, through at least early 2027):**
+`aws_db_instance.wedding.deletion_protection = false` (see
+`rds.tf`). Paired with `skip_final_snapshot = true`, this makes
+`terraform destroy` on phase 3 a clean, no-friction operation.
+
+**Why not `true` today.** During the build we're occasionally
+tearing phase 3 down (or considering it) for cost-check and
+rebuild-from-scratch drills. Every additional guardrail on the
+destroy path is one more manual step to un-flip before the
+destroy works — and one more chance to leave it un-flipped
+after a rebuild.
+
+**When to flip to `true`.** Session 16's launch checklist
+(`.claude/launch-checklist.md`, section 3) requires
+`deletion_protection = true` before the T–8-weeks pre-wedding
+verification pass. Concretely — flip **once we're confident there
+will be no more phase 3 tear-downs before the wedding**. That's
+around T–3 to T–4 months (roughly 2027-01 to 2027-02), well
+before the launch checklist runs. Earlier is fine if we're
+already stable; the only cost is a `plan/apply` to reverse if we
+change our minds.
+
+**How to flip.**
+
+```sh
+# 1. Edit infra/phase3/rds.tf, change to:
+#      deletion_protection = true
+#    Also consider flipping skip_final_snapshot to false and adding
+#    final_snapshot_identifier -- that's a separate, stronger
+#    guardrail worth landing in the same PR.
+
+cd infra/phase3
+terraform plan -out=tfplan   # expect: 1 to change (in-place update)
+terraform apply "tfplan"
+rm tfplan
+```
+
+**How to un-flip (if you need to destroy).**
+
+```sh
+# Reverse the edit, then:
+terraform plan -out=tfplan
+terraform apply "tfplan"
+rm tfplan
+terraform destroy   # now clean
+```
+
 ## Teardown
 
 The media bucket has `force_destroy = false`, so if it contains objects,
@@ -140,9 +189,10 @@ The media bucket has `force_destroy = false`, so if it contains objects,
 the S3 verification section for the version-aware delete).
 
 RDS teardown is quick because `skip_final_snapshot = true` and
-`deletion_protection = false`. If either is flipped for pre-wedding
-hardening, `terraform destroy` will refuse — reverse those first with a
-`plan/apply` before destroying.
+`deletion_protection = false` (see the section above — this is the
+intentional posture during the build phase). If either is flipped for
+pre-wedding hardening, `terraform destroy` will refuse — reverse those
+first with a `plan/apply` before destroying.
 
 ```sh
 terraform destroy   # ~5-8 min for RDS delete

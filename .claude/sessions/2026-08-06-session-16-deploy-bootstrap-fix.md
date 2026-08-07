@@ -1,4 +1,4 @@
-# Session 16 — Deploy bootstrap fix + self-healing SSM guard
+# Session 16 — Deploy bootstrap fix + launch checklist + phase3 README RDS note
 
 **Date:** 2026-08-06
 **Mode:** Execution — CI/CD hardening
@@ -40,9 +40,27 @@ the first deploy after the add.
   PR when the user is ready.
 
 **Renumber note.** No renumbering needed. S16 in the S15 handoff
-already covered five items (bootstrap, HSTS ramp, RDS deletion
-protection, real gallery, launch checklist); this session takes
-the urgent one (bootstrap) and leaves the rest for S17+.
+covered five items (bootstrap, HSTS ramp, RDS deletion
+protection, real gallery, launch checklist). After running the
+bootstrap and confirming success mid-session, user asked to
+"knock out the rest." Scope actually landed this session:
+
+- **Bootstrap fix + self-healing guard** (Step 0) — done.
+- **Launch checklist** (Step 4) — done, drafted at
+  `.claude/launch-checklist.md`.
+- **CloudFront invalidation** (Step 5) — consciously skipped with
+  the reasoning documented in this log and in the launch
+  checklist "Notes" section.
+- **RDS deletion protection** (Step 2) — decision explicitly
+  documented in `infra/phase3/README.md` with the "when to flip"
+  criterion and the plan/apply commands; the actual flip is
+  deferred to ~T–3 to T–4 months (2027-01/02).
+- **HSTS ramp** (Step 1) — deferred to S17+. S15's plan asked for
+  2 weeks of 60s soak; we've had 1 day. Doing the ramp now
+  defeats the soak's purpose.
+- **Real gallery page** (Step 3) — deferred to S17+. Design +
+  build, worth its own session with a design pass on the photo
+  grid + lightbox behavior.
 
 ## Session plan
 
@@ -97,6 +115,27 @@ the urgent one (bootstrap) and leaves the rest for S17+.
 | Choice | User runs a single `aws ssm send-command …` from the Mac. Not wrapped in a repo script. |
 | Why | Per [[feedback-long-running-commands]] and [[feedback-git-operations]] — this is a shared-state mutation on the production box that the user should have eyes on. One-shot bootstrap, no reuse value. If we ever hit this class of chicken-and-egg again, the self-healing guard added this session prevents recurrence, so the script wouldn't be reused anyway. |
 
+### CloudFront invalidation deliberately not added to deploy.sh
+
+| Area | Decision |
+|---|---|
+| Choice | `scripts/deploy.sh` does *not* fire `aws cloudfront create-invalidation` after `collectstatic`. Deploy stays: pip install → tar extract → migrate → collectstatic → restart gunicorn → curl-probe. No CloudFront call. |
+| Why | Given the current cache config, no invalidation is needed: (1) **Default behavior (`/*`, Django HTML pages)** uses the AWS-managed `CachingDisabled` cache policy — every request forwards to the EC2 origin. There is no cache to invalidate. (2) **`/static/*`** uses `CachingOptimized`, but Django's `ManifestS3StaticStorage` hashes filenames on `collectstatic`. A changed asset produces a new hashed URL; templates reference the new URL; CloudFront cannot serve stale content because nothing is asking for it. Old hashed URLs remain cached but are never requested. (3) **`/media/*`** uses `CachingOptimized` on uploads, and media object keys are content-URI-stable — we don't overwrite in place. Only case that would require an invalidation: someone manually overwrites a media object at the same S3 key with different content, or we change the default-behavior cache policy to actually cache Django-rendered pages. Neither is planned. Documented in the launch checklist "Notes" section so future-me doesn't add the invalidation step "just in case." |
+
+### RDS deletion protection stays `false` today; decision documented in phase3 README
+
+| Area | Decision |
+|---|---|
+| Choice | `aws_db_instance.wedding.deletion_protection = false` unchanged this session. Added a dedicated "RDS deletion protection — deferred flip" section to `infra/phase3/README.md` explaining the current-state rationale (destroy stays clean during build), the flip criterion (no more expected phase 3 tear-downs, roughly T–3 to T–4 months from the wedding = 2027-01/02), and the exact plan/apply commands to flip or un-flip. The launch checklist's "Security posture" section requires `deletion_protection = true` before the T–8-weeks verification pass, so the flip lands well before launch. |
+| Why | User's specific ask: document the decision explicitly in phase3's README so the "why is this off" question has a durable answer in the module's own docs, not just in a session log that's harder to find. Session logs are the *why-we-decided* record; the README is the *what-the-current-state-is-and-when-to-change* record. Both exist. |
+
+### Launch checklist lives at `.claude/launch-checklist.md`, structured T–8 weeks + T–1 week
+
+| Area | Decision |
+|---|---|
+| Choice | Single markdown file, nine numbered sections (prereqs, access + admin, deploy pipeline, security posture, observability, backups + recovery, content readiness, DNS + reachability, cost + surprise-services check, post-launch cleanup). Every step has an exact command or click-path — no derivation required at launch time. Two-wave structure: T–8 weeks (2027-03-28) for first pass with buffer for red-item fixes; T–1 week (2027-05-16) for final content freeze + manual RDS snapshot. |
+| Why | Wedding launches are one-shot; the checklist is only useful if it's runnable without thinking. The T–8-week wave catches infra issues with time to fix. The T–1-week wave catches content drift (copy tweaks, photo swaps, hotel block URL changes) without giving those changes time to introduce their own regressions. Scope is intentionally focused on things that actually matter for this site (~50 guests, private audience, read-heavy): no load testing, no pen testing, no WAF. Called out as out-of-scope in the "Notes" section so the omission is deliberate, not forgotten. |
+
 ---
 
 ## Progress
@@ -104,10 +143,12 @@ the urgent one (bootstrap) and leaves the rest for S17+.
 - [x] Session log created (this file).
 - [x] `.github/workflows/deploy.yml` — SSM body prepends `git fetch + git checkout $SHA` as ec2-user, chained with `&&` before the `scripts/deploy.sh` invocation.
 - [x] `yaml.safe_load` clean on `.github/workflows/deploy.yml`.
-- [x] Non-ASCII grep clean on files touched this session.
+- [x] Non-ASCII grep clean on files touched this session (matches only in prose; no AWS-resource description surface).
 - [x] Django test suite — no changes; last-green state from S15 (56 tests, ok) still stands. See Digressions for why no new test.
-- [ ] User: run the one-time SSM bootstrap command (Section 1 below).
-- [ ] User: commit + PR the `deploy.yml` edit → merge → verify next deploy succeeds.
+- [x] User: ran the one-time SSM bootstrap command mid-session. `scripts/deploy.sh` now present on the box.
+- [x] `.claude/launch-checklist.md` — drafted, nine sections, two-wave structure (T–8 weeks + T–1 week).
+- [x] `infra/phase3/README.md` — added "RDS deletion protection — deferred flip" section documenting current state, flip criterion, and plan/apply commands.
+- [ ] User: commit + PR the deploy.yml edit + launch checklist + phase3 README update + this log → merge → verify next automated deploy succeeds end-to-end.
 - [x] Session log finalized.
 
 ## Digressions worth remembering
@@ -172,35 +213,41 @@ Expected end of stdout:
 -rwxr-xr-x 1 ec2-user ec2-user <bytes> <date> scripts/deploy.sh
 ```
 
-### 2 — Commit + merge the `deploy.yml` self-healing edit
+### 2 — Commit + merge this session's changes
 
-This session touched only `.github/workflows/deploy.yml` (plus this
-log). The current working branch is `miscellaneous-template-updates`
-which has 5 unrelated template commits pending. Recommend one of:
+Files touched this session (all should land in one PR):
 
-**Option A (cleaner) — separate branch for the deploy fix:**
+- `.github/workflows/deploy.yml` — self-healing SSM guard.
+- `.claude/launch-checklist.md` — new.
+- `infra/phase3/README.md` — RDS deletion protection section added.
+- `.claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md` — this log.
+
+The current working branch is `miscellaneous-template-updates`
+which has 5 unrelated template commits pending. Recommend:
+
+**Option A (cleaner) — separate branch for the S16 changes:**
 ```
 git checkout main
 git pull
-git checkout -b s16-deploy-bootstrap-fix
-git add .github/workflows/deploy.yml .claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md
+git checkout -b s16-deploy-bootstrap-and-docs
+git add \
+  .github/workflows/deploy.yml \
+  .claude/launch-checklist.md \
+  infra/phase3/README.md \
+  .claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md
 # review with git diff --cached
 # commit + push + PR against main
 ```
 
-**Option B (pragmatic) — fold onto the existing branch:**
-```
-git checkout miscellaneous-template-updates
-git add .github/workflows/deploy.yml .claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md
-# commit + push + PR against main
-```
+**Option B (pragmatic) — fold onto the existing branch** if the
+`miscellaneous-template-updates` PR is going to merge soon anyway
+and you'd rather batch them.
 
-Either way: when the PR merges to main, the `deploy` workflow will
-fire. First it runs the *new* SSM body (pre-guard + deploy.sh
-invocation). If the bootstrap in step 1 was already run, the
-pre-guard is a no-op on the box (same fetched objects, checkout to
-that SHA). If step 1 hadn't been run, the pre-guard would fix the
-box itself — that's the self-healing property.
+Either way: when the PR merges to main, the `deploy` workflow
+fires with the new SSM body. The bootstrap in step 1 already ran,
+so the pre-guard is a no-op on the box (same fetched objects,
+checkout to that SHA); the self-healing property is what protects
+future first-deploys-after-adding-a-new-script.
 
 ### 3 — Verify the deploy
 
@@ -220,26 +267,37 @@ merged commit's content.
 ## Files created / modified this session
 
 **Created:**
-- `.claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md` — this log
+- `.claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md` — this log.
+- `.claude/launch-checklist.md` — pre-wedding verification checklist, two-wave (T–8 weeks + T–1 week).
 
 **Modified:**
 - `.github/workflows/deploy.yml` — SSM RunCommand body now
   prepends `sudo -u ec2-user bash -c 'set -e; cd …; git fetch
   --prune origin; git checkout --detach $SHA'` chained with `&&`
   before invoking `scripts/deploy.sh`.
+- `infra/phase3/README.md` — added "RDS deletion protection —
+  deferred flip (decision)" section between the RDS verification
+  section and Teardown; updated Teardown's existing brief mention
+  to cross-reference.
 
 Per working contract, all `git add` / `git commit` / `git push` is
 left to the user ([[feedback-git-operations]]).
 
 ## Session 17 handoff
 
-The S15 handoff had five items in "Session 16." This session took
-item 0 (bootstrap). The remaining four items carry forward:
+The S15 handoff had five items in "Session 16." S16 landed
+bootstrap + launch checklist + CloudFront no-op documentation +
+RDS decision doc. Two items carry forward, both timing-gated:
 
-### Step 1 — HSTS ramp (assuming Session 15's 60s soak is clean)
+### Step 1 — HSTS ramp (timing gate: soak must be clean)
 
-If two weeks of green deploys + healthy alarm output have gone by
-without any HTTPS regression:
+**Gate:** at least two weeks of green deploys + zero HTTPS-related
+alarm output from Session 15's ERROR/CRITICAL metric filter. S15
+was 2026-08-05, so the earliest this can start is ~2026-08-19,
+and only if the alarm has stayed quiet.
+
+Ramp sequence (one step per session, verify pin in browser DevTools
+after each push):
 
 1. `SECURE_HSTS_SECONDS = 3600` — one-hour commitment.
 2. `SECURE_HSTS_SECONDS = 604800` — one week.
@@ -248,33 +306,30 @@ without any HTTPS regression:
    https://hstspreload.org (irreversible; only once we're 100%
    committed to HTTPS forever on this domain — likely post-wedding).
 
-Each step: settings change + push. Update
-`test_hsts_seconds_set_to_soak_value` at each ramp so the test is a
-real assertion.
-
-### Step 2 — RDS deletion protection
-
-Flip `aws_db_instance.wedding.deletion_protection` to `true` closer
-to the wedding. Non-disruptive `terraform apply`.
+Each step: settings change + push (deploy workflow handles the
+rest). Update `test_hsts_seconds_set_to_soak_value` in
+`backend/config/tests.py` at each ramp so the test is a real
+assertion of the current pin, not a rubber stamp.
 
 ### Step 3 — Real gallery page
 
 Session 8's `Gallery` React island against `/api/photos/` is still
-stubbed. Design + implement.
+stubbed. Deserves its own session with a design pass first:
 
-### Step 4 — Launch checklist
+- Photo grid layout (masonry? uniform? aspect-preserving?).
+- Lightbox / detail view behavior (keyboard nav, close-on-swipe).
+- Image loading strategy (lazy load, `loading="lazy"`, `<picture>`
+  with mobile crops per S15's carried-over follow-up).
+- Alt-text sourcing (from admin, not hardcoded — pairs with the
+  S15 open question and the S16 hotel-block-links backlog item).
 
-Draft `.claude/launch-checklist.md` compiling: prod Django
-superuser via SSM (S14), SNS confirmation (S15), HSTS verification,
-branch protection enforcement, end-to-end deploy verification from
-a real push.
+### Timing-gated but not "carry forward" — RDS deletion protection
 
-### Step 5 — Post-deploy CloudFront invalidation (optional, low priority)
-
-`deploy.sh` doesn't invalidate. Not strictly needed because static
-assets are hashed by `ManifestS3StaticStorage` and dynamic pages
-are `CachingDisabled` at the CloudFront layer. Only revisit if
-caching strategy changes.
+Not a session task; a calendar item. Flip
+`aws_db_instance.wedding.deletion_protection` to `true` around
+T–3 to T–4 months (2027-01/02), per the criterion documented in
+`infra/phase3/README.md`. The launch checklist section 3
+enforces it before the T–8-week verification pass.
 
 ## Open questions / follow-ups
 
