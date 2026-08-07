@@ -150,7 +150,8 @@ bootstrap and confirming success mid-session, user asked to
 - [x] `infra/phase3/README.md` — added "RDS deletion protection — deferred flip" section documenting current state, flip criterion, and plan/apply commands.
 - [x] User: merged S16 PR (`session-16` → main, SHA `5b7bb2e`) — deploy workflow fired, self-healing guard worked (fetch + checkout `5b7bb2e` on the box), pip/tar/migrate/collectstatic/gunicorn-restart all succeeded, **but** post-flight probe returned HTTP 400 → deploy step failed. See Digression 3.
 - [x] `scripts/deploy.sh` — fixed the post-flight probe: added `-H "Host: $DOMAIN"` to the localhost curl so Django's `ALLOWED_HOSTS` doesn't 400 it.
-- [ ] User: PR the deploy.sh fix → merge → confirm the next deploy ends with `=== deploy done ... http=200 ===` (or 301, per the case block).
+- [x] User: pushed the deploy.sh fix straight to main via the `stnielse` ruleset bypass; deploy workflow succeeded end-to-end. Automated pipeline confirmed operational.
+- [x] Deleted unused `HotelBlock` model — removed the class from `backend/pages/models.py`, removed the import + `admin.site.register` from `backend/pages/admin.py`, generated `backend/pages/migrations/0002_drop_hotelblock.py` (one `DeleteModel` op). Resolves the S16-backlog "hotel block links" item by way of: model was built speculatively in an earlier phase, never wired to a view, template renders inline HTML that fits the design better than a model loop would. Inline HTML in `home.html` stays. Test suite: 56 tests, still green.
 - [x] Session log finalized.
 
 ## Digressions worth remembering
