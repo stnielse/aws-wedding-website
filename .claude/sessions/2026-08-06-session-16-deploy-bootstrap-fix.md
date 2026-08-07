@@ -148,7 +148,9 @@ bootstrap and confirming success mid-session, user asked to
 - [x] User: ran the one-time SSM bootstrap command mid-session. `scripts/deploy.sh` now present on the box.
 - [x] `.claude/launch-checklist.md` — drafted, nine sections, two-wave structure (T–8 weeks + T–1 week).
 - [x] `infra/phase3/README.md` — added "RDS deletion protection — deferred flip" section documenting current state, flip criterion, and plan/apply commands.
-- [ ] User: commit + PR the deploy.yml edit + launch checklist + phase3 README update + this log → merge → verify next automated deploy succeeds end-to-end.
+- [x] User: merged S16 PR (`session-16` → main, SHA `5b7bb2e`) — deploy workflow fired, self-healing guard worked (fetch + checkout `5b7bb2e` on the box), pip/tar/migrate/collectstatic/gunicorn-restart all succeeded, **but** post-flight probe returned HTTP 400 → deploy step failed. See Digression 3.
+- [x] `scripts/deploy.sh` — fixed the post-flight probe: added `-H "Host: $DOMAIN"` to the localhost curl so Django's `ALLOWED_HOSTS` doesn't 400 it.
+- [ ] User: PR the deploy.sh fix → merge → confirm the next deploy ends with `=== deploy done ... http=200 ===` (or 301, per the case block).
 - [x] Session log finalized.
 
 ## Digressions worth remembering
@@ -175,6 +177,61 @@ from main and pushes), the guard succeeds but the subsequent
 want the deploy to silently fall back to some other revision's
 `deploy.sh`. The guard only fixes the case where the *box's*
 checkout is stale, not where the *target SHA* is broken.
+
+**3. Latent S15 bug: post-flight probe hit `ALLOWED_HOSTS` 400.**
+S16's PR (`session-16` → main, SHA `5b7bb2e`) triggered the very
+first end-to-end automated deploy where the post-flight check
+actually ran. It failed. `scripts/deploy.sh:82` was:
+
+```
+status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/)
+```
+
+`curl http://localhost/` sends `Host: localhost`. Django's
+`CommonMiddleware` runs the `ALLOWED_HOSTS` check before anything
+else — including `SecurityMiddleware`'s SSL-redirect logic —
+and the box's `ALLOWED_HOSTS` env is
+`32.199.50.156,kaitlynandsteventietheknot.com,www.kaitlynandsteventietheknot.com`
+(no `localhost`). So Django returned 400 (`DisallowedHost`), the
+case block matched the wildcard, deploy.sh exited 1, and the
+workflow failed.
+
+Real user traffic was fine throughout — CloudFront's `AllViewer`
+origin request policy forwards the viewer's Host header
+(`kaitlynandsteventietheknot.com`) to gunicorn, which passes the
+allow-hosts check. Only the localhost probe was broken. The site
+never went down; the deploy job just told CI "no."
+
+**Fix** — the smallest possible: pass a Host header curl.
+`$DOMAIN` is already sourced from `backend/.env` earlier in the
+script (`set -a; . .env; set +a`), so no new inputs needed.
+
+```
+status=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $DOMAIN" http://localhost/)
+```
+
+Landed in this session. Note: this was written into `deploy.sh`
+in Session 15 and never exercised there (the S15 deploy failed
+one step earlier at "command not found" per Digression 3 above,
+so the probe never ran). Lesson: any step guarded by a preceding
+step that itself has known-failing preconditions is functionally
+untested until the earlier step is fixed. When we added
+`scripts/deploy.sh` in S15, the whole "downstream post-flight"
+was implicitly a first-run risk. Worth calling out in future
+sessions: if you're writing a new script whose steps depend on
+things a not-yet-run pipeline will produce, mentally flag each
+step as "not yet exercised" and treat the first successful run
+as a diagnostic exercise, not just a green light.
+
+**3b. Why the probe uses `-H "Host: $DOMAIN"` rather than
+`curl http://$DOMAIN/`.** Two reasons: (1) resolving the apex
+domain from the box would go through the public DNS → CloudFront
+→ back to the EC2 origin — a slow, indirect probe that doesn't
+actually test the local gunicorn/nginx stack. (2) The bug we
+just hit is precisely the one where the app's Host validation
+matters — so overriding the header while pointing at localhost
+is the correct test: it exercises the exact code path Django
+runs for real traffic, without leaving the box.
 
 ---
 
@@ -213,41 +270,35 @@ Expected end of stdout:
 -rwxr-xr-x 1 ec2-user ec2-user <bytes> <date> scripts/deploy.sh
 ```
 
-### 2 — Commit + merge this session's changes
+### 2 — Commit + merge this session's changes (S16 PR — DONE)
 
-Files touched this session (all should land in one PR):
+S16's initial changes were bundled into `session-16` and merged
+as PR #3 (SHA `5b7bb2e`). Deploy workflow fired, self-healing
+guard worked as designed, but the post-flight probe failed with
+HTTP 400 — see Digression 3. Site itself stayed up; only the
+deploy job's post-flight check failed.
 
-- `.github/workflows/deploy.yml` — self-healing SSM guard.
-- `.claude/launch-checklist.md` — new.
-- `infra/phase3/README.md` — RDS deletion protection section added.
-- `.claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md` — this log.
+### 2b — Hot-fix PR: deploy.sh post-flight Host header
 
-The current working branch is `miscellaneous-template-updates`
-which has 5 unrelated template commits pending. Recommend:
+One file changed (`scripts/deploy.sh`), plus this session log
+extension. Recommend a small standalone PR — it's a real
+production-path fix and shouldn't be batched with unrelated
+template edits:
 
-**Option A (cleaner) — separate branch for the S16 changes:**
 ```
 git checkout main
 git pull
-git checkout -b s16-deploy-bootstrap-and-docs
-git add \
-  .github/workflows/deploy.yml \
-  .claude/launch-checklist.md \
-  infra/phase3/README.md \
+git checkout -b s16-deploy-postflight-host-header
+git add scripts/deploy.sh \
   .claude/sessions/2026-08-06-session-16-deploy-bootstrap-fix.md
 # review with git diff --cached
 # commit + push + PR against main
 ```
 
-**Option B (pragmatic) — fold onto the existing branch** if the
-`miscellaneous-template-updates` PR is going to merge soon anyway
-and you'd rather batch them.
-
-Either way: when the PR merges to main, the `deploy` workflow
-fires with the new SSM body. The bootstrap in step 1 already ran,
-so the pre-guard is a no-op on the box (same fetched objects,
-checkout to that SHA); the self-healing property is what protects
-future first-deploys-after-adding-a-new-script.
+When the PR merges, the deploy workflow fires. The new SSM guard
+`git checkout --detach $SHA` picks up the fixed `deploy.sh`
+before running it, so the fix takes effect on its own merge.
+No manual bootstrap needed this time.
 
 ### 3 — Verify the deploy
 
@@ -279,6 +330,10 @@ merged commit's content.
   deferred flip (decision)" section between the RDS verification
   section and Teardown; updated Teardown's existing brief mention
   to cross-reference.
+- `scripts/deploy.sh` — post-flight probe now sets
+  `-H "Host: $DOMAIN"` on the curl so Django's ALLOWED_HOSTS
+  check doesn't 400 the localhost probe. Fix for latent S15 bug
+  surfaced by the S16 PR merge (see Digression 3).
 
 Per working contract, all `git add` / `git commit` / `git push` is
 left to the user ([[feedback-git-operations]]).
