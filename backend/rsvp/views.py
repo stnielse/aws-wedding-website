@@ -10,7 +10,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import MEAL_CHOICES, RSVP, Party
 
-REPLY_BY_DATE = '1 April 2027'
+REPLY_BY_DATE = '1 May 2027'
 VALID_MEAL_VALUES = {value for value, _ in MEAL_CHOICES}
 
 logger = logging.getLogger(__name__)
