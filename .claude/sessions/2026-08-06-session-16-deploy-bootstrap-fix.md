@@ -345,13 +345,3 @@ enforces it before the T–8-week verification pass.
   submit to hstspreload.org) — Session 17 after soak.
 - Unrelated to this session: `miscellaneous-template-updates`
   branch has 5 template commits pending user's own merge decision.
-- **Hotel block links — move from home template into the admin
-  flow.** User has an unmerged PR that adds hotel-block hyperlinks
-  as straight text in the home HTML template. There's already
-  Django admin machinery for managing these (likely the same
-  Guest/Event-adjacent models we've been using); the correct
-  fix is to route the links through that admin surface instead of
-  hardcoding them in the template. Revisit before merging that PR
-  — probably a small model field addition (or a URLField on an
-  existing model) + a template variable swap. Grep for existing
-  hotel/venue/accommodation admin logic to find the right seam.
