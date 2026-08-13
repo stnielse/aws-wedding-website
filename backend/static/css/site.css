@@ -1285,3 +1285,193 @@ button { font: inherit; }
   align-items: center;
   margin-top: 1.75rem;
 }
+
+/* ==== GALLERY PAGE =================================================== */
+
+.gallery-page {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: clamp(3rem, 8vw, 5rem) clamp(1.25rem, 4vw, 3rem) clamp(4rem, 10vw, 7rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.75rem, 4vw, 3rem);
+}
+
+.gallery-page__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 62ch;
+}
+
+.gallery-page__lead {
+  color: var(--text-body);
+  max-width: 56ch;
+}
+
+.gallery-root {
+  min-height: 40vh;
+}
+
+/* Grid — CSS multi-column masonry. Column count scales with viewport;
+   `break-inside: avoid` keeps each photo intact inside a column. */
+.gallery__grid {
+  column-count: 2;
+  column-gap: 12px;
+}
+@media (min-width: 700px) {
+  .gallery__grid { column-count: 3; }
+}
+@media (min-width: 1100px) {
+  .gallery__grid { column-count: 4; column-gap: 14px; }
+}
+
+.gallery__item {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 12px;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  break-inside: avoid;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+.gallery__item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.gallery__item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--shadow-md);
+}
+
+.gallery__img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--radius-md);
+  background: var(--surface-border);
+}
+
+/* Fallback noscript grid — same layout, but static <a> instead of <button>. */
+.gallery__grid--noscript .gallery__item { cursor: default; }
+
+/* Lightbox */
+.gallery__lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(20, 37, 28, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 3rem);
+  animation: gallery-fade-in var(--duration-med) var(--ease-out);
+}
+@keyframes gallery-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.gallery__lightbox-figure {
+  margin: 0;
+  max-width: min(100%, 96vw);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.gallery__lightbox-img {
+  max-width: 100%;
+  max-height: 84vh;
+  height: auto;
+  width: auto;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+}
+
+.gallery__lightbox-caption {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-on-dark);
+  text-align: center;
+  max-width: 56ch;
+  opacity: 0.86;
+}
+
+.gallery__lightbox-close,
+.gallery__lightbox-nav {
+  position: absolute;
+  background: rgba(20, 37, 28, 0.65);
+  border: 1px solid rgba(220, 194, 140, 0.35);
+  color: var(--text-on-dark);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+.gallery__lightbox-close:hover,
+.gallery__lightbox-nav:hover {
+  background: rgba(60, 89, 66, 0.85);
+  border-color: var(--accent-soft);
+}
+.gallery__lightbox-close:focus-visible,
+.gallery__lightbox-nav:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.gallery__lightbox-close {
+  top: clamp(0.75rem, 3vw, 1.5rem);
+  right: clamp(0.75rem, 3vw, 1.5rem);
+  width: 44px;
+  height: 44px;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.gallery__lightbox-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1;
+  padding-bottom: 6px;
+}
+.gallery__lightbox-nav--prev { left: clamp(0.5rem, 2vw, 1.5rem); }
+.gallery__lightbox-nav--next { right: clamp(0.5rem, 2vw, 1.5rem); }
+
+.gallery__lightbox-count {
+  position: absolute;
+  bottom: clamp(0.75rem, 3vw, 1.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--text-on-dark);
+  opacity: 0.62;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 620px) {
+  .gallery__lightbox-nav {
+    width: 44px;
+    height: 44px;
+    font-size: 1.75rem;
+  }
+  .gallery__lightbox-img {
+    max-height: 78vh;
+  }
+}
