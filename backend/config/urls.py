@@ -15,6 +15,8 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -24,3 +26,8 @@ urlpatterns = [
     path('gallery/', include('gallery.urls')),
     path('', include('pages.urls')),
 ]
+
+# Serve MEDIA_URL from disk in local dev only. Production uses S3 + CloudFront,
+# so MEDIA_URL isn't set and this branch is a no-op.
+if settings.DEBUG and getattr(settings, 'MEDIA_URL', None):
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
