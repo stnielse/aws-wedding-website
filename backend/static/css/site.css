@@ -1326,15 +1326,26 @@ button { font: inherit; }
   .gallery__grid { column-count: 4; column-gap: 14px; }
 }
 
+/* A "cell" is either a single photo or a b&w/color pair. `break-inside:
+   avoid` keeps the whole cell in one column, so pairs render stacked
+   under one another as intended even though CSS multi-column layout
+   otherwise redistributes items across columns to balance heights. */
+.gallery__cell {
+  break-inside: avoid;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .gallery__item {
   display: block;
   width: 100%;
   padding: 0;
-  margin: 0 0 12px;
+  margin: 0;
   border: 0;
   background: none;
   cursor: zoom-in;
-  break-inside: avoid;
   border-radius: var(--radius-md);
   overflow: hidden;
   transition: transform var(--duration-fast) var(--ease-out),

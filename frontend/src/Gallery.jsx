@@ -3,10 +3,40 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 const SIZES = '(min-width: 1100px) 25vw, (min-width: 700px) 33vw, 50vw'
 const LIGHTBOX_SIZES = '100vw'
 const SWIPE_MIN_PX = 40
+const COPY1_SUFFIX = '-copy1'
+
+/**
+ * Group each `<base>-copy1` photo with its base-slug partner into a single
+ * "cell". Cells are what get rendered into the CSS multi-column grid with
+ * `break-inside: avoid` — that guarantees the pair stays in one column.
+ * Singletons (a photo whose partner isn't present) form a one-photo cell.
+ * Assumes the input is already in sort order such that `-copy1` precedes
+ * its base (ASCII: '-' < '.'), which the server enforces.
+ */
+function groupIntoCells(photos) {
+  const cells = []
+  let i = 0
+  while (i < photos.length) {
+    const current = photos[i]
+    if (current.slug.endsWith(COPY1_SUFFIX)) {
+      const baseSlug = current.slug.slice(0, -COPY1_SUFFIX.length)
+      const next = photos[i + 1]
+      if (next && next.slug === baseSlug) {
+        cells.push({ key: current.slug, indices: [i, i + 1] })
+        i += 2
+        continue
+      }
+    }
+    cells.push({ key: current.slug, indices: [i] })
+    i += 1
+  }
+  return cells
+}
 
 export default function Gallery({ photos }) {
   const [openIndex, setOpenIndex] = useState(null)
   const isOpen = openIndex !== null
+  const cells = useMemo(() => groupIntoCells(photos || []), [photos])
 
   const openAt = useCallback((index) => setOpenIndex(index), [])
   const close = useCallback(() => setOpenIndex(null), [])
@@ -42,26 +72,33 @@ export default function Gallery({ photos }) {
   return (
     <>
       <div className="gallery__grid">
-        {photos.map((photo, i) => (
-          <button
-            key={photo.id}
-            type="button"
-            className="gallery__item"
-            onClick={() => openAt(i)}
-            aria-label={photo.alt ? `Open photo: ${photo.alt}` : `Open photo ${i + 1} of ${photos.length}`}
-          >
-            <img
-              className="gallery__img"
-              src={photo.src}
-              srcSet={photo.srcset}
-              sizes={SIZES}
-              width={photo.width}
-              height={photo.height}
-              loading="lazy"
-              decoding="async"
-              alt={photo.alt || ''}
-            />
-          </button>
+        {cells.map((cell) => (
+          <div key={cell.key} className="gallery__cell">
+            {cell.indices.map((i) => {
+              const photo = photos[i]
+              return (
+                <button
+                  key={photo.id}
+                  type="button"
+                  className="gallery__item"
+                  onClick={() => openAt(i)}
+                  aria-label={photo.alt ? `Open photo: ${photo.alt}` : `Open photo ${i + 1} of ${photos.length}`}
+                >
+                  <img
+                    className="gallery__img"
+                    src={photo.src}
+                    srcSet={photo.srcset}
+                    sizes={SIZES}
+                    width={photo.width}
+                    height={photo.height}
+                    loading="lazy"
+                    decoding="async"
+                    alt={photo.alt || ''}
+                  />
+                </button>
+              )
+            })}
+          </div>
         ))}
       </div>
 
