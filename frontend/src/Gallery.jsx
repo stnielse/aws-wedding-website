@@ -4,6 +4,36 @@ const SIZES = '(min-width: 1100px) 25vw, (min-width: 700px) 33vw, 50vw'
 const LIGHTBOX_SIZES = '100vw'
 const SWIPE_MIN_PX = 40
 const COPY1_SUFFIX = '-copy1'
+const COLUMN_BREAKPOINTS = [
+  { minWidth: 1100, columns: 4 },
+  { minWidth: 700, columns: 3 },
+  { minWidth: 0, columns: 2 },
+]
+
+/**
+ * React to the CSS breakpoints in site.css (2/3/4 cols at 0/700/1100px).
+ * Kept in JS so we can distribute cells into flex columns and let
+ * `justify-content: space-between` on each column align the bottom edges.
+ */
+function useColumnCount() {
+  const pick = () => {
+    if (typeof window === 'undefined') return COLUMN_BREAKPOINTS[0].columns
+    const hit = COLUMN_BREAKPOINTS.find(({ minWidth }) =>
+      window.matchMedia(`(min-width: ${minWidth}px)`).matches,
+    )
+    return hit ? hit.columns : COLUMN_BREAKPOINTS.at(-1).columns
+  }
+  const [n, setN] = useState(pick)
+  useEffect(() => {
+    const mqls = COLUMN_BREAKPOINTS
+      .filter(({ minWidth }) => minWidth > 0)
+      .map(({ minWidth }) => window.matchMedia(`(min-width: ${minWidth}px)`))
+    const update = () => setN(pick())
+    mqls.forEach((mql) => mql.addEventListener('change', update))
+    return () => mqls.forEach((mql) => mql.removeEventListener('change', update))
+  }, [])
+  return n
+}
 
 /**
  * Group each `<base>-copy1` photo with its base-slug partner into a single
@@ -37,6 +67,26 @@ export default function Gallery({ photos }) {
   const [openIndex, setOpenIndex] = useState(null)
   const isOpen = openIndex !== null
   const cells = useMemo(() => groupIntoCells(photos || []), [photos])
+  const numCols = useColumnCount()
+
+  /**
+   * Chunk cells into N contiguous columns of near-equal count. Because all
+   * photos share similar aspect ratios (mostly portrait engagement shots),
+   * equal cell-count columns produce nearly equal natural heights; the
+   * `justify-content: space-between` on each column then absorbs any
+   * residual to align the bottom edges. Purely count-based so this stays
+   * O(N) and doesn't need per-photo height math.
+   */
+  const columns = useMemo(() => {
+    const cols = Array.from({ length: numCols }, () => [])
+    if (cells.length === 0) return cols
+    const per = Math.ceil(cells.length / numCols)
+    cells.forEach((cell, i) => {
+      const col = Math.min(numCols - 1, Math.floor(i / per))
+      cols[col].push(cell)
+    })
+    return cols
+  }, [cells, numCols])
 
   const openAt = useCallback((index) => setOpenIndex(index), [])
   const close = useCallback(() => setOpenIndex(null), [])
@@ -72,32 +122,36 @@ export default function Gallery({ photos }) {
   return (
     <>
       <div className="gallery__grid">
-        {cells.map((cell) => (
-          <div key={cell.key} className="gallery__cell">
-            {cell.indices.map((i) => {
-              const photo = photos[i]
-              return (
-                <button
-                  key={photo.id}
-                  type="button"
-                  className="gallery__item"
-                  onClick={() => openAt(i)}
-                  aria-label={photo.alt ? `Open photo: ${photo.alt}` : `Open photo ${i + 1} of ${photos.length}`}
-                >
-                  <img
-                    className="gallery__img"
-                    src={photo.src}
-                    srcSet={photo.srcset}
-                    sizes={SIZES}
-                    width={photo.width}
-                    height={photo.height}
-                    loading="lazy"
-                    decoding="async"
-                    alt={photo.alt || ''}
-                  />
-                </button>
-              )
-            })}
+        {columns.map((colCells, colIndex) => (
+          <div key={colIndex} className="gallery__column">
+            {colCells.map((cell) => (
+              <div key={cell.key} className="gallery__cell">
+                {cell.indices.map((i) => {
+                  const photo = photos[i]
+                  return (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      className="gallery__item"
+                      onClick={() => openAt(i)}
+                      aria-label={photo.alt ? `Open photo: ${photo.alt}` : `Open photo ${i + 1} of ${photos.length}`}
+                    >
+                      <img
+                        className="gallery__img"
+                        src={photo.src}
+                        srcSet={photo.srcset}
+                        sizes={SIZES}
+                        width={photo.width}
+                        height={photo.height}
+                        loading="lazy"
+                        decoding="async"
+                        alt={photo.alt || ''}
+                      />
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
           </div>
         ))}
       </div>
