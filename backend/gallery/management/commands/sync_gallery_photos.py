@@ -19,9 +19,12 @@ from pathlib import Path
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 
+from django.db.models import Max
+
 from gallery.models import Photo
 
 SUPPORTED_EXTS = {'.jpg', '.jpeg', '.png'}
+ORDER_STEP = 10
 
 
 class Command(BaseCommand):
@@ -51,6 +54,13 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f'no supported images under {src}'))
             return
 
+        # Reserve `order` values for the sorted file list so filename order
+        # is preserved in the view (which sorts by `order`, then uploaded_at).
+        # New photos start after any existing highest order, in ORDER_STEP
+        # increments so admin edits have breathing room.
+        current_max = Photo.objects.aggregate(m=Max('order'))['m'] or 0
+        next_order = current_max + ORDER_STEP
+
         created = 0
         skipped = 0
 
@@ -66,13 +76,14 @@ class Command(BaseCommand):
                 self.stdout.write(f'  drop  {path.name} (slug={slug}, --force)')
                 existing.delete()
 
-            photo = Photo(slug=slug)
+            photo = Photo(slug=slug, order=next_order)
+            next_order += ORDER_STEP
             with path.open('rb') as fp:
                 photo.image.save(path.name, ContentFile(fp.read()), save=True)
 
             self.stdout.write(self.style.SUCCESS(
                 f'  add   {path.name} → id={photo.pk} slug={photo.slug} '
-                f'({photo.width}×{photo.height})'
+                f'({photo.width}×{photo.height}) order={photo.order}'
             ))
             created += 1
 
