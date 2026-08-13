@@ -160,16 +160,16 @@ Both landed this session.
 - [x] `gallery/urls.py` + `config/urls.py` — new `gallery:index` route; retired `pages:gallery`.
 - [x] `gallery/views.py` — real `gallery_index` view returning JSON payload for the React island.
 - [x] `templates/gallery.html` extends base with intro + `<script id="gallery-data">` + `<div id="gallery-root">` + noscript fallback.
-- [x] `frontend/src/Gallery.jsx` — masonry grid + lightbox implementation (keyboard, swipe, backdrop).
-- [x] `frontend/pnpm build` — outputs to `backend/static/frontend/assets/main.js` (202 KB / 63 KB gzip).
-- [x] `backend/static/css/site.css` — appended `~180` lines of gallery + lightbox styles.
+- [x] `frontend/src/Gallery.jsx` — masonry grid + lightbox (keyboard, swipe, backdrop); pairing into `.gallery__cell` containers so b&w/color pairs stay in the same column; `useColumnCount` + flex-column distribution with `justify-content: space-between` so bottom edges of all columns align.
+- [x] `frontend/pnpm build` — outputs to `backend/static/frontend/assets/main.js` (203.5 KB / 63.9 KB gzip after final iteration).
+- [x] `backend/static/css/site.css` — appended `~200` lines of gallery + lightbox styles (flex columns for JS grid, multi-column fallback for noscript).
 - [x] `config/urls.py` — local `/media/` mount conditional on DEBUG.
 - [x] Base + home template refs updated from `pages:gallery` → `gallery:index`.
 - [x] `manage.py sync_gallery_photos` command created; smoke-tested with 40-photo subset, then run against full 324-photo source dir. Full sync: 40 skipped (from subset run) + 284 added, all 324 rows land with valid dimensions, 1296 derivative JPGs on disk under `backend/media/gallery/derivatives/`.
 - [x] Verified in browser: user confirmed grid + pair adjacency + lightbox all look right on the 40-photo subset; also tweaked the intro copy to their voice ("Wasatch air…&hearts; Steven") — kept.
 - [x] Final page render: `/gallery/` returns 200 in ~23ms, HTML payload 342 KB (mostly the embedded 324-photo JSON array), pairs adjacent at `order=10..3240` in `10`-step increments.
 - [x] Unit tests written + passing: 15 tests in `gallery/tests.py` (up from 3), full suite 67/67 (down from 68 — dropped the `pages:gallery` coming-soon test since that URL is retired).
-- [ ] Session log finalized (this step).
+- [x] Session log finalized (this step).
 
 ## Files created / modified this session
 
@@ -339,7 +339,26 @@ derivative pipeline: we explicitly `storage.delete(key)` before
 `storage.save(key, content)` in the `force=True` branch to actually
 overwrite. Same behavior in both `FileSystemStorage` and `S3Storage`.
 
-**3. CSS multi-column masonry redistributes items across columns to
+**4. Bottom-edge alignment across columns needed a layout switch.**
+Second review round after the pair fix: with CSS multi-column, all
+columns end at slightly different vertical positions because the
+`column-fill: balance` algorithm equalizes column HEIGHTS but each
+column's content is a stack of variable-height photos — no way to
+force exact bottom alignment. Rebuilt as JS-assigned flex columns:
+`useColumnCount()` reacts to the same 2/3/4-column breakpoints as
+before, cells split into contiguous chunks (`Math.ceil(N/cols)` per
+column), each column flex-lays out with `justify-content:
+space-between`. First and last cell pin to the column's top/bottom
+edges, residual space distributes evenly between the middle cells.
+Because photo aspect ratios are similar across the shoot,
+equal-count chunks give near-equal natural heights and the residual
+`space-between` distribution is small (visually imperceptible per
+user's spec). Purely count-based means it's O(N) and stays correct
+as photos are added via admin — no per-photo height math or resize
+observers required. Fully dynamic: runs the same way for 324 photos
+today or 500+ post-wedding.
+
+**5. CSS multi-column masonry redistributes items across columns to
 balance heights — pairs can drift out of column.** User caught this
 in review: `DSC04289-Copy1` ended up in a different column than
 `DSC04289`, breaking the visual pair adjacency the user had
