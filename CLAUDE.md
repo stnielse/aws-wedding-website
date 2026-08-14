@@ -11,6 +11,15 @@ Claude may propose a commit message or describe what would be staged, but must n
 
 The user stages and commits frequently throughout the session, so an end-of-session `git status` printout is redundant — do not run one as a wrap-up gesture. Running `git status` mid-session for a specific reason (e.g., confirming an in-flight edit landed) is still fine.
 
+### Terraform commands — user-only
+Claude **never** runs any `terraform` subcommand that talks to a provider or writes to state or the working directory: this includes `terraform plan`, `terraform apply`, `terraform destroy`, `terraform init`, `terraform import`, `terraform refresh`, `terraform state *`, `terraform taint`/`untaint`, `terraform workspace *`. The user runs all of these and shares back any output that matters (plan diff, apply summary, errors).
+
+Local read-only inspection of Terraform artifacts is fine — reading `.tf` files, reading `terraform.tfstate` (though prefer `terraform output` output pasted by the user), reading planned artifacts the user has already produced (`tfplan` files), `terraform fmt -check`, `terraform validate` (no network, no state write).
+
+Claude may propose the exact command to run and the flags to use, and may describe expected plan output — but must not execute it.
+
+*Why:* Plans and applies for this project touch live AWS state (CloudFront, RDS, EC2 with EIP, S3 buckets holding real photos). The user owns the shell where those commands run so they can see credentials context, cancel mid-plan if something looks off, and keep a mental model of provider drift. Claude driving `plan` divides that ownership in ways that have caused surprises before.
+
 ### Session logs
 Every non-trivial working session begins by creating a session log at `.claude/sessions/YYYY-MM-DD-session-NN-<slug>.md`. The log captures context, decisions locked, issues resolved, open questions, files touched, and a running progress checklist. See `.claude/sessions/2026-07-13-session-01-design.md` for the canonical template.
 
