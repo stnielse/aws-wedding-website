@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Photographs · Kaitlyn &amp; Steven{% endblock %}
+
+{% block content %}
+  <section class="gallery-page">
+    <div class="gallery-page__intro">
+      <div class="eyebrow">Photographs</div>
+      <h1 class="h-section">From the engagement shoot</h1>
+      <p class="body gallery-page__lead">Crisp Wasatch air, under the setting sun, just one trailhead away from where I got down on one knee and popped the question. Tap any photo to see it full-size. &hearts; Steven</p>
+    </div>
+
+    <script type="application/json" id="gallery-data">{{ gallery_data_json|safe }}</script>
+    <div id="gallery-root" class="gallery-root">
+      {% if photo_count == 0 %}
+        <p class="body" style="text-align: center; padding: 3rem 0;">Photos are on the way.</p>
+      {% else %}
+        <p class="body" style="text-align: center; padding: 3rem 0;">Loading the gallery…</p>
+      {% endif %}
+    </div>
+
+    <noscript>
+      <div class="gallery__grid--noscript">
+        {% for photo in photos %}
+          <a class="gallery__item" href="{{ photo.src }}">
+            <img class="gallery__img"
+                 src="{{ photo.src }}"
+                 srcset="{{ photo.srcset }}"
+                 sizes="(min-width: 1100px) 25vw, (min-width: 700px) 33vw, 50vw"
+                 width="{{ photo.width }}" height="{{ photo.height }}"
+                 loading="lazy" decoding="async"
+                 alt="{{ photo.alt }}">
+          </a>
+        {% endfor %}
+      </div>
+    </noscript>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module" src="{% static 'frontend/assets/main.js' %}"></script>
+{% endblock %}

@@ -11,7 +11,3 @@ def travel(request):
 
 def registry(request):
     return render(request, 'coming_soon.html', {'page_title': 'Registry'})
-
-
-def gallery(request):
-    return render(request, 'coming_soon.html', {'page_title': 'Photographs'})

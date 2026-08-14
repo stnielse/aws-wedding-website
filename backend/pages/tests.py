@@ -71,6 +71,3 @@ class ComingSoonPagesTests(TestCase):
 
     def test_registry_returns_200(self):
         self.assertEqual(self.client.get(reverse('pages:registry')).status_code, 200)
-
-    def test_gallery_returns_200(self):
-        self.assertEqual(self.client.get(reverse('pages:gallery')).status_code, 200)
