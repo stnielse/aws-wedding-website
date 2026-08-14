@@ -76,13 +76,15 @@ Three items from Session 17's handoff, batched into one session:
 
 **On unit tests:** No application code shipped this session — changes are Terraform (nginx template, ec2.tf, s3_media.tf, user_data template) and infra-only. Verification is `terraform validate` + `terraform plan` review + post-apply smoke tests (nginx redirect check via `curl -I https://www.<apex>/gallery/`; swap check via `free -m`; lifecycle rule visible in `aws s3api get-bucket-lifecycle-configuration`). Django test suite still passes at 67/67 from S17 with no changes needed.
 
-## Applying swap to the current live instance
+## Applying user_data-templated changes to the current live instance
 
 `user_data_replace_on_change = false` and `user_data` only fires on
-first boot anyway, so the swap block added to
-`infra/phase3/templates/user_data.sh.tftpl` this session takes effect
+first boot anyway, so BOTH changes added to user_data this session
+(the swap block AND the nginx server block for www→apex) take effect
 on **future** instance rebuilds only. The live t3.micro needs a
-one-time apply. Two options.
+one-time on-box apply for each.
+
+### Swap file — two options for the one-time apply.
 
 **Option A — interactive SSM session (easier for one-time work):**
 
@@ -155,6 +157,88 @@ identity), so no `sudo` wrapper needed inside the payload.
 
 Either option is idempotent — the `[ ! -f /swapfile ]` guard makes
 re-running safe.
+
+### nginx config — replace `/etc/nginx/conf.d/wedding-site.conf` and reload
+
+The new `server` block for `www.kaitlynandsteventietheknot.com` needs
+to reach the live nginx before the redirect actually fires. Options
+are the same shape as the swap apply — interactive session or
+send-command. Below is the send-command form; use interactive if you
+prefer to eyeball each step.
+
+Domain is hardcoded here at `kaitlynandsteventietheknot.com` because
+we're rendering the template's `${domain_name}` at write time. If the
+value ever changes (it won't for this project), re-render from
+`infra/phase3/templates/nginx-site.conf.tftpl` accordingly.
+
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+
+BOX_CMD='set -e
+cat > /etc/nginx/conf.d/wedding-site.conf <<'"'"'NGINXEOF'"'"'
+upstream gunicorn {
+    server unix:/run/gunicorn/gunicorn.sock;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.kaitlynandsteventietheknot.com;
+
+    return 301 https://kaitlynandsteventietheknot.com$request_uri;
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    client_max_body_size 25M;
+
+    location / {
+        proxy_pass http://gunicorn;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_redirect                     off;
+        proxy_read_timeout                 60s;
+    }
+}
+NGINXEOF
+nginx -t
+systemctl reload nginx'
+PARAMS=$(jq -n --arg cmd "$BOX_CMD" '{commands: [$cmd]}')
+
+command_id=$(aws ssm send-command \
+    --instance-ids "$INSTANCE_ID" \
+    --document-name AWS-RunShellScript \
+    --comment "S18 nginx www->apex redirect apply" \
+    --parameters "$PARAMS" \
+    --query 'Command.CommandId' --output text)
+echo "Dispatched: $command_id"
+
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID"
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+  --output json \
+  | jq -r '"status: \(.Status)", "----- stdout -----", .StandardOutputContent, "----- stderr -----", .StandardErrorContent'
+```
+
+`nginx -t` before `systemctl reload nginx` is deliberate — a syntax
+error in the reload would leave the running config unchanged (good)
+but would fail the SSM invocation, which is the signal to check the
+output before touching the file again.
+
+**Workflow gap flagged for a future session:** nginx config lives in
+a `.tftpl` rendered by `templatefile()` and shipped via user_data,
+but `user_data_replace_on_change = false` means TF apply doesn't
+propagate nginx changes to the live box. Every future nginx change
+needs a manual on-box sync. Options for closing this gap: a
+`null_resource` in TF that fires an SSM send-command on nginx template
+hash change; extending `scripts/deploy.sh` to include an nginx sync
+step; or accepting the manual apply as a rare-enough event. Not
+blocking for S18.
 
 ## Files created / modified this session
 
