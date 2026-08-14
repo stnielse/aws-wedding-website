@@ -41,6 +41,31 @@ Self-hosted wedding website targeting live-and-stable by end of June 2026. Full 
 - **Frontend root:** `/Users/stevennielsen/aws-wedding-website/frontend/`. Use `pnpm` via corepack (`packageManager` field in `frontend/package.json` pins the version).
 - **Runserver port:** `8765`. **Vite dev server:** `http://localhost:5175/` — NOT `127.0.0.1` (Vite 8 quirk from Session 6).
 
+### Never guess AWS resource identifiers
+
+Bucket names, ARNs, instance IDs, security group IDs, distribution IDs, hosted zone IDs, ACM cert ARNs, IAM role names, KMS keys, RDS endpoints, **CloudWatch log group names**, **SSM Parameter Store paths** — anything that names a live AWS resource — are **resolved at use-time, never guessed or recalled from memory**. Two authoritative sources:
+
+- **Terraform outputs**: `terraform -chdir=infra/<module> output -raw <name>`. Grep `infra/**/outputs.tf` for the exact output name if unsure.
+- **AWS CLI**: `aws <service> describe-*`/`list-*`/`aws logs describe-log-groups`/`aws ssm describe-parameters` etc. — pick the read call that names the thing you need.
+
+This applies in every code path where the identifier lands in front of the user: session logs, handoff commands, PR descriptions, comments in code, shell one-liners you hand to the user to run. If you cannot resolve the identifier in the current environment (no AWS creds, no TF state, sandbox), write a placeholder that makes the resolution step explicit — e.g., `s3://$(terraform -chdir=infra/phase3 output -raw media_bucket_name)/...` — rather than a plausible-looking string. Plausible-looking strings that turn out to be wrong waste the user's time debugging a "why does this AWS command 404" issue that should never have existed.
+
+*Why:* Session 17 hit this twice in one evening — first a guessed media-bucket name (real name is TF-templated `${project_tag}-media-${account_id}` → `wedding-site-media-<account_id>`; user hit `NoSuchBucket`), then a guessed log group name (`/wedding/django` vs real `/wedding-site/django`; diagnostic tail returned `ResourceNotFoundException` and the on-box sync silently continued OOMing the box). Both cost real minutes to diagnose.
+
+### SSM `send-command` payloads — always JSON via jq, never shorthand with escapes
+
+When constructing `aws ssm send-command --parameters` for anything that contains nested quotes (e.g. `sudo -u ec2-user bash -c "..."`), **build the payload as real JSON with jq**:
+
+```
+BOX_CMD="sudo -u ec2-user bash -c '…'"
+PARAMS=$(jq -n --arg cmd "$BOX_CMD" '{commands: [$cmd]}')
+aws ssm send-command --parameters "$PARAMS" …
+```
+
+Never use the CLI's `--parameters "commands=[\"...\"]"` shorthand for anything non-trivial. The shorthand parser silently strips embedded quoting on nested `bash -c "..."`, and the on-box command runs with truncated arguments. Symptom: SSM reports `Failed` with stderr like `aws: [ERROR]: the following arguments are required: paths` — because the arguments literally vanished at parse time. This is the same pattern `.github/workflows/deploy.yml` uses; match it.
+
+*Why:* Session 17 lost ~15 min chasing "no output" on a Failed SSM invocation before realizing the shorthand had eaten the `bash -c` inner args.
+
 ## Critical rules (from handoff)
 - Never use root AWS credentials — IAM admin user only
 - Never commit `.env`, `terraform.tfvars`, `*.tfstate`, or any secret-bearing file

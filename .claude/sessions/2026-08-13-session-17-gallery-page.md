@@ -63,9 +63,11 @@ here so a future session doesn't have to re-derive:
   storage backend differs by env; the model code is identical.
 - **Local**: `FileSystemStorage` writes under `MEDIA_ROOT`. `runserver`
   serves the `/media/` prefix (wired this session — see below).
-- **Prod**: `S3Storage` writes to the private
-  `kaitlyn-and-steven-media` bucket at `media/gallery/*`.
-  `photo.image.url` returns a CloudFront URL
+- **Prod**: `S3Storage` writes to the private media bucket at the
+  `media/gallery/*` prefix. Bucket name is templated in Terraform
+  (`${var.project_tag}-media-${account_id}`) — resolve at runtime with
+  `terraform -chdir=infra/phase3 output -raw media_bucket_name`, never
+  hardcode. `photo.image.url` returns a CloudFront URL
   (`https://<cloudfront-domain>/media/gallery/*`) via
   `AWS_S3_CUSTOM_DOMAIN`. Bucket is private; only CloudFront's OAC
   identity can read from it.
@@ -245,34 +247,71 @@ that'll fire on next merge:
        first. Two sub-steps:
 
        ```
+       # Resolve the media bucket + instance id from Terraform. Do NOT hardcode.
+       BUCKET=$(terraform -chdir=infra/phase3 output -raw media_bucket_name)
+       INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+
        # Step A: from the Mac, upload source photos to a scratch prefix
-       # on the media bucket (skip re-uploading if already there):
+       # on the media bucket. Idempotent: rerun after an SSO token
+       # expiry safely picks up where it left off.
        aws s3 sync ~/engagement_photos \
-           s3://kaitlyn-and-steven-media/scratch/gallery-source/ \
+           "s3://$BUCKET/scratch/gallery-source/" \
            --exact-timestamps
 
        # Step B: SSM to the box, sync from that scratch prefix into
        # the Photo model (which will regenerate derivatives at
-       # media/gallery/derivatives/ in the same bucket). One command:
-       INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+       # media/gallery/derivatives/ in the same bucket).
+       #
+       # NOTE: build the SSM parameters as real JSON via jq — do NOT
+       # use the CLI's --parameters "commands=[...]" shorthand with
+       # escaped quotes. The shorthand parser silently strips the
+       # inner quoting on a nested `bash -c "..."`, and the on-box
+       # command runs with its arguments truncated. Symptom: SSM
+       # invocation reports Failed with stderr like
+       # `aws: [ERROR]: the following arguments are required: paths`.
+       # Same pattern as `deploy.yml` — pass a proper JSON blob.
+       BOX_CMD="sudo -u ec2-user bash -c 'set -e; cd /home/ec2-user/aws-wedding-website && mkdir -p /tmp/gallery-source && aws s3 sync s3://$BUCKET/scratch/gallery-source/ /tmp/gallery-source/ && cd backend && ../.venv/bin/python manage.py sync_gallery_photos /tmp/gallery-source --settings=config.settings.production && rm -rf /tmp/gallery-source'"
+       PARAMS=$(jq -n --arg cmd "$BOX_CMD" '{commands: [$cmd]}')
 
        command_id=$(aws ssm send-command \
            --instance-ids "$INSTANCE_ID" \
            --document-name AWS-RunShellScript \
            --comment "S17 gallery bulk-load" \
-           --parameters 'commands=["sudo -u ec2-user bash -c \"set -e; cd /home/ec2-user/aws-wedding-website && mkdir -p /tmp/gallery-source && aws s3 sync s3://kaitlyn-and-steven-media/scratch/gallery-source/ /tmp/gallery-source/ && cd backend && ../.venv/bin/python manage.py sync_gallery_photos /tmp/gallery-source --settings=config.settings.production && rm -rf /tmp/gallery-source\""]' \
+           --parameters "$PARAMS" \
            --query 'Command.CommandId' --output text)
+       echo "Dispatched: $command_id"
 
        aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID"
        aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
-         --output json | jq -r '"status: \(.Status)", .StandardOutputContent, .StandardErrorContent'
+         --output json \
+         | jq -r '"status: \(.Status)", "----- stdout tail -----", (.StandardOutputContent | split("\n") | .[-60:] | join("\n")), "----- stderr -----", .StandardErrorContent'
        ```
 
-       The EC2 instance role already has S3 read+write on
-       `kaitlyn-and-steven-media` (verified via `terraform output` in
-       S12 log). Local disk on the t3.micro is ~30 GB — 5.2 GB of
-       source fits with room. Delete the scratch prefix from S3 after
-       the sync succeeds if you want to keep the bucket tidy.
+       The EC2 instance role already has S3 read+write on the media
+       bucket (verified via `terraform output` in the S12 log). Local
+       disk on the t3.micro is ~30 GB — 5.2 GB of source fits with
+       room. Delete the scratch prefix from S3 after the sync succeeds
+       if you want to keep the bucket tidy.
+
+       **Cleaning up orphaned multipart uploads.** If Step A hit an
+       SSO token expiry mid-upload (any `ExpiredToken` on
+       `CreateMultipartUpload` / `UploadPart` / `CompleteMultipartUpload`),
+       aborted uploads leave orphan parts billed as storage until you
+       abort them. `aws s3 sync` re-run doesn't clean these up. Sweep:
+
+       ```
+       aws s3api list-multipart-uploads --bucket "$BUCKET" --prefix scratch/gallery-source/ \
+         --query 'Uploads[].[Key,UploadId]' --output text \
+         | while read -r key upload_id; do
+             [ -z "$upload_id" ] && continue
+             aws s3api abort-multipart-upload --bucket "$BUCKET" --key "$key" --upload-id "$upload_id"
+           done
+       ```
+
+       Or, permanent fix: add a lifecycle rule to `infra/phase3/s3_media.tf`
+       — `aws_s3_bucket_lifecycle_configuration` with
+       `abort_incomplete_multipart_upload { days_after_initiation = 3 }`
+       ages any orphans out automatically. Deferred; not blocking.
 
 **3. Verify.** Hit `https://kaitlynandsteventietheknot.com/gallery/`.
    Grid should populate; each `<img src>` will be a CloudFront URL,
@@ -386,3 +425,127 @@ doesn't call it and (b) if it were, would happily read from
 `MEDIA_ROOT` (which prod doesn't populate). The DEBUG guard means the
 `urlpatterns.append(...)` line is a no-op in prod even if we somehow
 imported urls.py under prod settings.
+
+---
+
+## Addendum — Post-merge production bulk-load incident + Option 3 recovery (evening of 2026-08-13)
+
+Merged branch, deployed cleanly, migration applied. Then spent ~4 hours getting 324 photos into prod. Everything below happened between the "wrap up" checkpoint and gallery-live-in-prod.
+
+### What actually landed
+- **324 Photo rows in prod RDS**, all with valid `slug`/`width`/`height`, `order` in `[10 … 3240]` step 10.
+- **1296 derivative JPGs** in `s3://<media-bucket>/media/gallery/derivatives/` (4 widths × 324 photos).
+- **324 originals** in `s3://<media-bucket>/media/gallery/originals/` (uploaded from Mac during the local sync — see below).
+- **5.2 GB duplicate copy** of originals also sitting at `s3://<media-bucket>/scratch/gallery-source/` from the earlier failed Step A. Delete before wrap: `aws s3 rm "s3://$BUCKET/scratch/gallery-source/" --recursive`.
+- Gallery renders correctly on **apex** URL (`https://kaitlynandsteventietheknot.com/gallery/`).
+- Gallery is **broken on www** URL — see "Known issue: www CORS block" below. Fix A deferred to S18.
+
+### The path to get there — five distinct failure classes surfaced in sequence
+
+**1. Guessed bucket name in the handoff.**
+Initial handoff wrote `s3://kaitlyn-and-steven-media/...` from memory. Actual bucket is templated in Terraform as `${var.project_tag}-media-${account_id}`, so the real name is `wedding-site-media-633321546572`. User's first `aws s3 sync` hit `NoSuchBucket`. Fixed the log to source via `terraform -chdir=infra/phase3 output -raw media_bucket_name` at use time, and added the "Never guess AWS resource identifiers" rule to `CLAUDE.md`.
+
+**2. SSO token expiry mid-upload of the 5.2 GB source set.**
+`aws s3 sync ~/engagement_photos s3://$BUCKET/scratch/gallery-source/` completed ~60% of files before the user's SSO token expired. Failed uploads included in-flight `CreateMultipartUpload`/`UploadPart`/`CompleteMultipartUpload` calls — those left **orphaned multipart parts** in S3 which are billed as storage and never age out without a lifecycle rule. Cleanup recipe:
+```
+aws s3api list-multipart-uploads --bucket "$BUCKET" --prefix scratch/gallery-source/ \
+  --query 'Uploads[].[Key,UploadId]' --output text \
+  | while read -r key upload_id; do
+      [ -z "$upload_id" ] && continue
+      aws s3api abort-multipart-upload --bucket "$BUCKET" --key "$key" --upload-id "$upload_id"
+    done
+```
+Permanent fix (deferred to S18): add `aws_s3_bucket_lifecycle_configuration` to `infra/phase3/s3_media.tf` with `abort_incomplete_multipart_upload { days_after_initiation = 3 }` so this class of leak self-heals.
+
+**3. SSM `--parameters` shorthand silently ate the nested `bash -c "..."` args.**
+First on-box `sync_gallery_photos` invocation (Step B) was built with the CLI's `--parameters "commands=[...]"` shorthand and escaped quotes for the nested `sudo -u ec2-user bash -c "..."`. The shorthand parser strips the inner quoting; the on-box command runs with no arguments for `aws s3 sync`. Symptom: SSM reports `Failed` with stderr:
+```
+aws: [ERROR]: the following arguments are required: paths
+```
+Fix: build the payload as real JSON via `jq -n --arg cmd "$BOX_CMD" '{commands: [$cmd]}'` and pass with `--parameters "$PARAMS"`. Same pattern `deploy.yml` uses. Patched into the log's Step B recipe.
+
+**4. Log group name — another guessed identifier.**
+Diagnostic recipes tried to tail `/wedding/django`; actual group is `/wedding-site/django` (list via `aws logs describe-log-groups`). Same anti-pattern as (1). Second occurrence in one session — extended `CLAUDE.md`'s identifier rule to explicitly name log group names as a member of the "never guess" set.
+
+**5. Pillow OOM on t3.micro (site down).**
+Corrected SSM invocation dispatched successfully and ran for ~20 minutes. Then:
+- SSM `PingStatus: ConnectionLost`, `StatusDetails: Undeliverable`.
+- EC2 status `running`, hypervisor + hardware checks `ok`.
+- Site returning nothing in the browser.
+
+Diagnosis: OOM killer took gunicorn, nginx, and the SSM Agent when Pillow's synchronous 6000×4500 JPEG resize exhausted the t3.micro's 1 GB RAM. All three services are systemd-managed with auto-restart but they can't restart if RAM is still starved — the box just sits there `running` from EC2's view, unresponsive to everything.
+
+**Recovery:** `aws ec2 reboot-instances --instance-ids "$INSTANCE_ID"`. ~3 minutes for reboot + service restart to bring `PingStatus` back to `Online` and gunicorn back to `HTTP/2 200`.
+
+### Option 3 — local sync against prod, bypassing the box entirely
+
+Since re-running the same on-box sync would OOM the box again, switched to running `sync_gallery_photos` **locally** on the Mac against **prod RDS via SSM port-forward** and **prod S3 via SSO creds**. Zero new code — the existing management command works unchanged when handed prod-shaped env vars.
+
+**Setup (two terminals):**
+
+Terminal 1 — RDS tunnel (leave running):
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+RDS_HOST=$(aws ssm get-parameter --name /wedding-site/prod/DB_HOST --query 'Parameter.Value' --output text)
+aws ssm start-session \
+  --target "$INSTANCE_ID" \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"$RDS_HOST\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"15432\"]}"
+```
+
+Terminal 2 — install prod deps into local venv, export env vars from SSM Parameter Store, run sync:
+```
+.venv/bin/pip install -r backend/requirements/production.txt awscrt
+
+export DB_NAME=$(aws ssm get-parameter --name /wedding-site/prod/DB_NAME --query 'Parameter.Value' --output text)
+export DB_USER=$(aws ssm get-parameter --name /wedding-site/prod/DB_USER --query 'Parameter.Value' --output text)
+export DB_PASSWORD=$(aws ssm get-parameter --name /wedding-site/prod/DB_PASSWORD --with-decryption --query 'Parameter.Value' --output text)
+export DB_HOST=localhost
+export DB_PORT=15432
+export AWS_STORAGE_BUCKET_NAME=$(terraform -chdir=infra/phase3 output -raw media_bucket_name)
+export AWS_REGION=$(aws configure get region 2>/dev/null || echo us-east-1)
+# Required at settings import time, unused by this run:
+export DJANGO_SECRET_KEY=local-bulk-load-not-used-for-signing
+export DOMAIN=kaitlynandsteventietheknot.com
+export AWS_STATIC_BUCKET_NAME=unused-for-bulk-load
+
+cd backend
+../.venv/bin/python manage.py sync_gallery_photos ~/engagement_photos \
+    --settings=config.settings.production 2>&1 | tee /tmp/bulk-load.log
+```
+
+Wall clock **~25–30 min** for 324 photos on a Mac with reasonable broadband. Each photo: read local file → upload original to prod S3 → Pillow resize to 4 widths → upload 4 derivatives → insert row via tunneled RDS. No box CPU/RAM touched at any point.
+
+**Interleaved output caveat.** Once the sync starts, stderr (JSON-formatted `photo_uploaded`/`photo_derivatives_generated` events from `gallery.signals` under production LOGGING config) writes straight to the terminal, while stdout `add DSCXXX.jpg → id=...` lines lag behind through `tee`'s block buffer. Looks visually broken but both streams describe the same photos in the same order — the stream separation is just a flush-cadence artifact.
+
+### Known issue deferred to S18 — the `www` subdomain gallery is broken by CORS
+
+After the sync landed all 324 photos, gallery worked on `https://kaitlynandsteventietheknot.com/gallery/` (apex) but showed "Loading the gallery…" indefinitely on `https://www.kaitlynandsteventietheknot.com/gallery/` (www subdomain).
+
+**Cause:** `production.py`'s `AWS_STATIC_CUSTOM_DOMAIN` env is set to the apex, so `{% static ... %}` renders links to `https://kaitlynandsteventietheknot.com/static/...` regardless of which origin the page was served from. When the page is loaded from `www.`, the browser sees `www.` → apex requests as **cross-origin** and blocks the JS bundle + fonts under CORS since the response has no `Access-Control-Allow-Origin` header. React never mounts → "Loading the gallery…" persists.
+
+**Fix A (planned for S18 — canonical + cleaner):** CloudFront-level 301 from `www.*` → apex. A CloudFront Function attached to the viewer-request event of the www alias handles this cheaply; Terraform-manageable in `infra/phase3/cloudfront.tf`. Also update the Route 53 www alias if needed. After the redirect is in place, no code change to Django needed — every viewer lands on apex, no cross-origin, no CORS.
+
+**Fix B (not chosen):** Add an `Access-Control-Allow-Origin: https://www.kaitlynandsteventietheknot.com` response header via a CloudFront Response Headers Policy on the `/static/*` and `/media/*` behaviors. Faster to ship but leaves the site with two canonical origins — SEO smell, doubled cache surface.
+
+### Follow-ups for Session 18
+
+- **Fix A: `www` → apex CloudFront redirect** — CF Function, TF change, apply.
+- **S3 lifecycle rule to auto-abort orphaned multipart uploads** — `abort_incomplete_multipart_upload { days_after_initiation = 3 }` in `infra/phase3/s3_media.tf`.
+- **Photo upload OOM guard.** Admin uploads run the same `post_save` derivative-generation code path on the t3.micro box. A single 30-MB portrait from a modern camera could OOM the same way. Three options:
+  - Cheapest: add a `~1 GB` swap file on the box (survives reboots via fstab). Slow when hit but doesn't OOM. Handles the occasional-large-photo case without adding architectural complexity.
+  - Middle ground: server-side downscale rejection — cap `Photo.image` on `clean()` to reject sources over N megapixels or N MB, forcing the user to pre-resize.
+  - Right answer long-term: move derivative generation to a background job (Celery + Redis, or a simple async worker). Overkill for a wedding site with maybe 100 more photos total over its lifetime.
+- **Delete the scratch prefix on S3** — 5.2 GB of duplicated originals from the failed Step A run: `aws s3 rm "s3://$BUCKET/scratch/gallery-source/" --recursive`.
+- **Multipart-upload orphan sweep** — see recipe under failure class (2) above, or defer if the lifecycle rule lands first.
+- **HSTS ramp** — still gated on soak clean (from S16 handoff, ~2026-08-19 earliest).
+- **RDS deletion protection flip** — calendar item, 2027-01/02.
+
+### `CLAUDE.md` amendments landed this session
+
+- **Never guess AWS resource identifiers** — new section under Working Contract. Applies to bucket names, ARNs, instance/security-group/distribution IDs, RDS endpoints, hosted zone IDs, IAM roles, KMS keys, **and log group names** (added after the second guessed-identifier miss in one session). Resolve at use time via `terraform output` or `aws <service> describe-*/list-*`; use `$(…)` placeholders in handoff recipes when the resolver isn't available at write time.
+
+Should extend `CLAUDE.md` further in S18:
+
+- **SSM `--parameters` payload construction** — always build with `jq -n --arg cmd "$CMD" '{commands: [$cmd]}'` and pass with `--parameters "$PARAMS"`. Never use `--parameters "commands=[\"…\"]"` shorthand for anything with nested quotes; the shorthand parser silently strips them. Same pattern `deploy.yml` uses today.
+
