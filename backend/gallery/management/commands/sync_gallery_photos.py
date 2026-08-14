@@ -46,8 +46,7 @@ class Command(BaseCommand):
             raise CommandError(f'not a directory: {src}')
 
         files = sorted(
-            p for p in src.iterdir()
-            if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS
+            p for p in src.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS
         )
         if not files:
             self.stdout.write(self.style.WARNING(f'no supported images under {src}'))
@@ -80,17 +79,20 @@ class Command(BaseCommand):
             with path.open('rb') as fp:
                 photo.image.save(path.name, ContentFile(fp.read()), save=True)
 
-            self.stdout.write(self.style.SUCCESS(
-                f'  add   {path.name} → id={photo.pk} slug={photo.slug} '
-                f'({photo.width}×{photo.height}) order={photo.order}'
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'  add   {path.name} → id={photo.pk} slug={photo.slug} '
+                    f'({photo.width}×{photo.height}) order={photo.order}'
+                )
+            )
             created += 1
 
-        self.stdout.write(self.style.SUCCESS(
-            f'done — {created} added, {skipped} skipped, {len(files)} scanned'
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(f'done — {created} added, {skipped} skipped, {len(files)} scanned')
+        )
 
     @staticmethod
     def _slug_from(path: Path) -> str:
         from django.utils.text import slugify
+
         return slugify(path.stem)[:90] or 'photo'

@@ -109,9 +109,7 @@ class GenerateDerivativesTests(SimpleTestCase):
         self.storage.save(source_key, ContentFile(_jpeg_bytes(2400, 1600)))
 
         generate_derivatives(source_key, 'synth-force', storage=self.storage)
-        forced = generate_derivatives(
-            source_key, 'synth-force', storage=self.storage, force=True
-        )
+        forced = generate_derivatives(source_key, 'synth-force', storage=self.storage, force=True)
         self.assertEqual(len(forced.generated), len(WIDTHS))
         self.assertEqual(forced.skipped, [])
 
@@ -267,6 +265,7 @@ class GalleryViewTests(TestCase):
 
     def _extract_json(self, body: bytes) -> dict:
         import re
+
         m = re.search(
             rb'<script[^>]*id="gallery-data"[^>]*>(.*?)</script>',
             body,

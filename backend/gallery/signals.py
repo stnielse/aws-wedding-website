@@ -78,9 +78,7 @@ def _generate_photo_derivatives(sender, instance, created, **_kwargs):
         return
 
     # `update()` bypasses save() so we don't re-fire post_save.
-    Photo.objects.filter(pk=instance.pk).update(
-        width=result.width, height=result.height
-    )
+    Photo.objects.filter(pk=instance.pk).update(width=result.width, height=result.height)
     instance.width = result.width
     instance.height = result.height
 
