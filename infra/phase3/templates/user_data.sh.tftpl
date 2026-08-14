@@ -29,6 +29,46 @@ AWS_REGION="${aws_region}"
 echo "=== user_data begin ($(date -Is)) ==="
 
 # --------------------------------------------------------------------------
+# Swap file (1 GB) — OOM hedge for Pillow bursts on t3.micro's 1 GB RAM.
+#
+# The gallery derivative pipeline (backend/gallery/services.py) resizes
+# source JPEGs via Pillow synchronously in the request path when a Photo
+# row is created (post_save signal). A 6000×4500 source decodes to
+# ~80 MB of raw RGB, plus a per-width target buffer, plus a transient
+# EXIF-transpose buffer — working set can reach ~250-300 MB per photo.
+# Combined with 3 gunicorn workers (~200 MB each), nginx, systemd, SSM
+# Agent, and kernel, a single admin upload can push past 1 GB and
+# trip the OOM killer, which takes gunicorn/nginx/SSM with it (see
+# Session 17 addendum — post-bulk-load incident).
+#
+# 1 GB swap gives the kernel room to page cold pages out (idle workers,
+# static caches) so the transient Pillow spike fits in physical RAM
+# without evicting anything critical. Not a substitute for RAM — EBS
+# swap is slow — a safety net for occasional bursts.
+#
+# vm.swappiness=10 (default is 60) keeps swap idle unless RAM pressure
+# is real. Prevents the kernel from lazily swapping gunicorn workers
+# during quiet moments, which would make every cold request pay
+# disk-latency page-in cost.
+#
+# dd (not fallocate) because fallocate on XFS can produce a swap file
+# that mkswap rejects; dd always works. Guarded on file existence so
+# a user_data re-run is a no-op.
+# --------------------------------------------------------------------------
+if [ ! -f /swapfile ]; then
+    dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+    chmod 0600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+cat > /etc/sysctl.d/99-swappiness.conf <<'SYSCTLEOF'
+vm.swappiness=10
+SYSCTLEOF
+sysctl -p /etc/sysctl.d/99-swappiness.conf
+
+# --------------------------------------------------------------------------
 # System packages
 # --------------------------------------------------------------------------
 dnf -y update
