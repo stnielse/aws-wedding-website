@@ -69,12 +69,13 @@ Three items from Session 17's handoff, batched into one session:
 - [x] nginx `www → apex` 301 server block added to `infra/phase3/templates/nginx-site.conf.tftpl`; `ec2.tf` switched to `templatefile()` to pass `var.domain_name`.
 - [x] S3 lifecycle rule `abort-incomplete-multipart-uploads` added to `infra/phase3/s3_media.tf`.
 - [x] Swap-file provisioning added to `infra/phase3/templates/user_data.sh.tftpl` (for future instance rebuilds).
-- [ ] `terraform plan` reviewed with user; `terraform apply` run by user.
-- [ ] Post-apply: swap file applied once to the current live instance via SSM (recipe below).
-- [ ] Post-apply: verify `https://www.kaitlynandsteventietheknot.com/gallery/` 301s to apex; verify apex still serves gallery correctly.
-- [ ] Session log finalized.
+- [x] `terraform plan` reviewed with user (3 in-place updates: `aws_instance.web` user_data, `aws_s3_bucket_lifecycle_configuration.media`, defensively-re-read `aws_iam_role_policy.github_deploy`); user ran `terraform apply tfplan`.
+- [x] Post-apply: nginx config replaced + reloaded on the live box via SSM (base64 form after paste-indent broke the initial heredoc form — see digression 1 below); swap file provisioned via SSM.
+- [x] Post-apply verification: `curl -I https://www.<apex>/gallery/` returns `HTTP/2 301` with `location: https://<apex>/gallery/`; `curl -I https://<apex>/gallery/` returns `HTTP/2 200` content-length 477506 (regression check); `aws s3api get-bucket-lifecycle-configuration` shows both `expire-noncurrent-versions` and new `abort-incomplete-multipart-uploads` rules Enabled.
+- [x] `CLAUDE.md` amended: new "Terraform commands — user-only" section under Working Contract; matching update to memory `feedback_long_running_commands.md`.
+- [x] Session log finalized (this step).
 
-**On unit tests:** No application code shipped this session — changes are Terraform (nginx template, ec2.tf, s3_media.tf, user_data template) and infra-only. Verification is `terraform validate` + `terraform plan` review + post-apply smoke tests (nginx redirect check via `curl -I https://www.<apex>/gallery/`; swap check via `free -m`; lifecycle rule visible in `aws s3api get-bucket-lifecycle-configuration`). Django test suite still passes at 67/67 from S17 with no changes needed.
+**On unit tests:** No application code shipped this session — changes are Terraform (nginx template, ec2.tf, s3_media.tf, user_data template) and infra-only. Verification is `terraform validate` + `terraform plan` review + post-apply smoke tests (nginx redirect check via `curl -I https://www.<apex>/gallery/`; swap check via `free -m` in the SSM invocation output; lifecycle rule visible in `aws s3api get-bucket-lifecycle-configuration`). All three landed green. Django test suite still passes at 67/67 from S17 with no changes needed.
 
 ## Applying user_data-templated changes to the current live instance
 
@@ -250,10 +251,96 @@ blocking for S18.
 - `infra/phase3/templates/nginx-site.conf.tftpl` — added `server_name www.${domain_name}` block that 301s to apex.
 - `infra/phase3/ec2.tf` — flipped `nginx_conf` from `file()` to `templatefile()` so `var.domain_name` interpolates into the nginx template.
 - `infra/phase3/s3_media.tf` — added `abort-incomplete-multipart-uploads` rule to the existing `aws_s3_bucket_lifecycle_configuration.media`.
+- `CLAUDE.md` — new "Terraform commands — user-only" section under Working Contract (all `terraform` subcommands including `plan` are user-run; local read-only inspection like `terraform validate`/`fmt -check` is fine).
+
+Per working contract, all `git add` / `git commit` / `git push` is left
+to the user. Recommended commit message:
+
+    Session 18 — www→apex 301, S3 multipart lifecycle, EC2 swap hedge, CLAUDE.md terraform rule
+
+## Digressions worth remembering
+
+**1. Interactive-shell paste added leading whitespace on multi-line
+SSM `BOX_CMD` heredocs, silently corrupting the target file.**
+
+The first attempt at the nginx apply used a `cat > file <<'NGINXEOF'`
+heredoc inside `BOX_CMD` (single-quoted so `$host` etc stay literal
+for nginx). Pasting the whole block into the interactive shell added
+~2 spaces of leading whitespace to some lines — including the bare
+`NGINXEOF` terminator. `<<'NGINXEOF'` (no `-`) does NOT strip leading
+whitespace before matching, so bash never found the terminator, read
+to EOF, and passed the ENTIRE remainder (config body + `NGINXEOF` +
+`nginx -t` + `systemctl reload nginx`) into the file as heredoc
+content. Symptoms:
+
+- SSM invocation reports `Status: Success` because `cat > file`
+  returned 0 (the heredoc EOF is a warning, not an error). `set -e`
+  did not fire.
+- stdout empty. stderr had one line:
+  `warning: here-document at line 2 delimited by end-of-file (wanted 'NGINXEOF')`.
+- `nginx -t` and `systemctl reload nginx` never ran, so nginx stayed
+  on its OLD config in memory (site stayed up).
+- `/etc/nginx/conf.d/wedding-site.conf` on disk was corrupt (config
+  followed by literal `NGINXEOF`, `nginx -t`, `systemctl reload nginx`).
+  Any future `nginx -s reload` or service restart would have failed
+  syntax validation with the site staying up on the old config only
+  as long as nginx wasn't reload-triggered.
+
+Fix that worked: encoded the nginx config as a single-line base64
+blob locally, then `echo '<b64>' | base64 -d > file` inside `BOX_CMD`.
+No heredoc, no quoting hazards, immune to paste-indent. Same pattern
+applied to the swap command (replaced the `<<EOF` for the sysctl
+file with `echo 'vm.swappiness=10' > /etc/sysctl.d/99-swappiness.conf`).
+
+**Guidance for future sessions:** anything with an embedded heredoc
+inside a `BOX_CMD` should either (a) be encoded as base64 and decoded
+on the box, or (b) be pasted from a local `.sh` file with
+`bash /tmp/foo.sh` rather than pasted directly into the interactive
+shell prompt. Root cause is interactive-shell paste behavior — the
+SSM Send-Command payload itself preserved bytes correctly through
+`jq`, `--parameters "$PARAMS"`, and the AWS-RunShellScript document.
+
+**2. `user_data_replace_on_change = false` means nginx template
+changes never reach the live box without manual on-box apply.**
+
+`ec2.tf`'s `user_data` is templated with the rendered
+`nginx-site.conf.tftpl`. On `terraform apply`, TF sees the user_data
+attribute value change and updates it in state, but does NOT touch
+the running instance's `/etc/nginx/conf.d/wedding-site.conf`
+(because user_data only fires on first boot, and
+`user_data_replace_on_change = false` deliberately blocks a replace).
+Every future nginx config change needs the same on-box sync pattern
+this session used. Workflow-gap options (deferred):
+- Add a `null_resource` in TF that fires an SSM send-command on
+  nginx template hash change (`triggers = { hash = filemd5(...) }`).
+- Extend `scripts/deploy.sh` to include an nginx sync step.
+- Accept manual apply as rare-enough (once every N months) and just
+  script the recipe in each session log.
 
 ## Session 19 handoff
 
-*(Filled in at wrap.)*
+**Timing-gated (calendar items, not carry-forward tasks):**
+- **HSTS ramp** — earliest 2026-08-19 (5 days out), gated on
+  ERROR/CRITICAL log filter staying quiet through then. Ramp sequence
+  unchanged from S16 handoff (3600 → 604800 → 31536000 +
+  INCLUDE_SUBDOMAINS → optional PRELOAD).
+- **RDS deletion protection** — flip `aws_db_instance.wedding.deletion_protection`
+  to `true` around T–3 to T–4 months (2027-01/02).
+
+**S19-shape work (see Open questions for full context on each):**
+- **CloudFront cache policy on `/gallery/`** — flagged this session
+  as the top S19 candidate. Bounds cost + latency risk if the wedding
+  link gets shared and 500-5000 relatives hit `/gallery/` in a day.
+- **Photo alt-text / captions** — pipeline supports it; bulk sync
+  left both blank. Admin UI additions as time allows.
+
+**Workflow gaps flagged this session but deferred:**
+- **nginx template → live box sync** — see digression 2 above.
+  Not blocking; the manual on-box recipe works.
+- **Admin-upload OOM guard beyond swap** — swap is the safety net;
+  if it ever kicks in for a real upload, consider the fuller options
+  from S17 handoff (server-side downscale rejection on the model,
+  or move derivative generation to a background job).
 
 ## Open questions / follow-ups
 
