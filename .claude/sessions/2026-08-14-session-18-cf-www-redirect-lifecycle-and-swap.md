@@ -62,15 +62,99 @@ Three items from Session 17's handoff, batched into one session:
 - [x] Session log created (this file).
 - [ ] CloudFront Function `www_to_apex_redirect` added to `infra/phase3/cloudfront.tf`; attached to `www.` alias viewer-request event.
 - [ ] S3 lifecycle configuration added to `infra/phase3/s3_media.tf` — `abort_incomplete_multipart_upload { days_after_initiation = 3 }`.
-- [ ] Swap-file provisioning added to `infra/phase3/templates/user_data.sh.tftpl` (for future instance rebuilds).
-- [ ] Swap file applied once to the current live instance via SSM (idempotent recipe below).
+- [x] Swap-file provisioning added to `infra/phase3/templates/user_data.sh.tftpl` (for future instance rebuilds).
+- [ ] Swap file applied once to the current live instance via SSM (recipe below).
 - [ ] `terraform plan` reviewed with user; `terraform apply` run by user.
 - [ ] Unit tests written + passing.
 - [ ] Session log finalized.
 
+## Applying swap to the current live instance
+
+`user_data_replace_on_change = false` and `user_data` only fires on
+first boot anyway, so the swap block added to
+`infra/phase3/templates/user_data.sh.tftpl` this session takes effect
+on **future** instance rebuilds only. The live t3.micro needs a
+one-time apply. Two options.
+
+**Option A — interactive SSM session (easier for one-time work):**
+
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+aws ssm start-session --target "$INSTANCE_ID"
+
+# Then, inside the session:
+sudo bash -c '
+    set -e
+    if [ ! -f /swapfile ]; then
+        dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+        chmod 0600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo "/swapfile none swap sw 0 0" >> /etc/fstab
+    fi
+    cat > /etc/sysctl.d/99-swappiness.conf <<EOF
+vm.swappiness=10
+EOF
+    sysctl -p /etc/sysctl.d/99-swappiness.conf
+    free -m
+    cat /proc/sys/vm/swappiness
+'
+```
+
+`free -m` should show a `Swap:` row with `total ≈ 1024`. `cat
+/proc/sys/vm/swappiness` should print `10`.
+
+**Option B — SSM send-command (scripted, matches deploy pattern):**
+
+Build the payload as real JSON via `jq` — never the `--parameters
+"commands=[...]"` shorthand (S17 CLAUDE.md rule).
+
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+
+BOX_CMD='set -e
+if [ ! -f /swapfile ]; then
+    dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+    chmod 0600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+cat > /etc/sysctl.d/99-swappiness.conf <<EOF
+vm.swappiness=10
+EOF
+sysctl -p /etc/sysctl.d/99-swappiness.conf
+free -m
+cat /proc/sys/vm/swappiness'
+PARAMS=$(jq -n --arg cmd "$BOX_CMD" '{commands: [$cmd]}')
+
+command_id=$(aws ssm send-command \
+    --instance-ids "$INSTANCE_ID" \
+    --document-name AWS-RunShellScript \
+    --comment "S18 swap-file provision" \
+    --parameters "$PARAMS" \
+    --query 'Command.CommandId' --output text)
+echo "Dispatched: $command_id"
+
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID"
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+  --output json \
+  | jq -r '"status: \(.Status)", "----- stdout -----", .StandardOutputContent, "----- stderr -----", .StandardErrorContent'
+```
+
+SSM Send-Command runs as root by default (Systems Manager Agent
+identity), so no `sudo` wrapper needed inside the payload.
+
+Either option is idempotent — the `[ ! -f /swapfile ]` guard makes
+re-running safe.
+
 ## Files created / modified this session
 
-*(Filled in as changes land.)*
+**Created:**
+- `.claude/sessions/2026-08-14-session-18-cf-www-redirect-lifecycle-and-swap.md` — this log.
+
+**Modified:**
+- `infra/phase3/templates/user_data.sh.tftpl` — added swap-file bootstrap block (1 GB `/swapfile`, `vm.swappiness=10`) between the header setup and `dnf -y update`. Runs only if `/swapfile` doesn't already exist, so re-runs are no-ops.
 
 ## Session 19 handoff
 
