@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
-from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
@@ -174,7 +174,7 @@ class PhotoModelAndPipelineTests(TestCase):
 
         parts = [chunk.strip() for chunk in photo.srcset.split(',')]
         self.assertEqual(len(parts), len(WIDTHS))
-        for part, width in zip(parts, WIDTHS):
+        for part, width in zip(parts, WIDTHS, strict=True):
             self.assertIn(f'{width}w', part)
             self.assertIn(f'arch-{width}.jpg', part)
 
@@ -230,9 +230,9 @@ class GalleryViewTests(TestCase):
 
     def test_view_orders_by_order_then_uploaded_at_desc(self):
         # Same order, different upload times: newest wins in tiebreaker.
-        a = self._make_photo('one.jpg', order=0, caption='one')
+        self._make_photo('one.jpg', order=0, caption='one')
         b = self._make_photo('two.jpg', order=0, caption='two')
-        c = self._make_photo('three.jpg', order=-1 if False else 0, caption='three')
+        self._make_photo('three.jpg', order=-1 if False else 0, caption='three')
 
         response = self.client.get(reverse('gallery:index'))
         payload = self._extract_json(response.content)

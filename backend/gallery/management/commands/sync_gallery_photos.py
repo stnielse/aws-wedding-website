@@ -18,7 +18,6 @@ from pathlib import Path
 
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
-
 from django.db.models import Max
 
 from gallery.models import Photo
