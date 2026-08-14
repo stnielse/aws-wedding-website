@@ -48,7 +48,9 @@ resource "aws_instance" "web" {
       app_dir = "/home/ec2-user/aws-wedding-website"
     })
     nginx_main = file("${path.module}/templates/nginx-main.conf.tftpl")
-    nginx_conf = file("${path.module}/templates/nginx-site.conf.tftpl")
+    nginx_conf = templatefile("${path.module}/templates/nginx-site.conf.tftpl", {
+      domain_name = var.domain_name
+    })
   })
   user_data_replace_on_change = false
 

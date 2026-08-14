@@ -2,6 +2,20 @@ upstream gunicorn {
     server unix:/run/gunicorn/gunicorn.sock;
 }
 
+# 301 redirect www.<apex> -> <apex>. Nginx matches server_name most-specific
+# first, so requests forwarded from CloudFront with Host: www.<apex> land
+# here; everything else (apex, EIP direct hits) falls to the default_server
+# block below. See Session 18 for why we consolidate on a single canonical
+# origin (CORS block on the static bundle URL, which is apex-hardcoded via
+# AWS_STATIC_CUSTOM_DOMAIN).
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.${domain_name};
+
+    return 301 https://${domain_name}$request_uri;
+}
+
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
