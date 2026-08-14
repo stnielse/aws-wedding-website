@@ -173,8 +173,9 @@ re-running safe.
 
 ## Open questions / follow-ups
 
-*(Carried from S17 unless noted.)*
+*(Carried from S17 unless noted; new items marked NEW.)*
 
+- **NEW — CloudFront cache policy on `/gallery/` (and other cacheable Django pages) to bound cost on a busy day.** The default cache behavior currently uses `CachingDisabled` (`4135ea2d-6df8-44a3-9df3-4b5a84be39ad`), so every HTML page load hits EC2 → gunicorn → Django → RDS. For `/gallery/`, that's a 342 KB HTML payload (mostly the embedded 324-photo JSON) and a full ORM roundtrip per view. If the wedding link gets shared and 500-5000 relatives hit `/gallery/` in a day, EC2 CPU credits could plausibly saturate on `db.t3.micro`+`ec2.t3.micro` — not a cash-cost issue (both are flat-rate), but a throttling-and-latency issue for real viewers. Fix shape: a per-behavior cache policy for `/gallery/` (and maybe `/schedule/`, `/travel/`, others that change infrequently) that caches HTML at CloudFront for 5-15 min, forwarding no cookies/qs into the cache key. `/rsvp/` and `/admin/*` must stay `CachingDisabled` (dynamic per-guest). Bust the cache on admin Photo add/edit via an SSM-triggered CloudFront invalidation or a Django signal that hits the CF `CreateInvalidation` API. Session 19 candidate. Data transfer out is a separate lever (~$0.085/GB after free tier) — caching HTML doesn't reduce image transfer, but it does keep the site responsive during traffic spikes and reduce derivative/query load if we later add view-count analytics.
 - **HSTS ramp** — earliest 2026-08-19, gated on ERROR/CRITICAL log filter staying quiet.
 - **RDS deletion protection** — flip 2027-01/02.
 - **Photo alt-text / captions** — bulk sync leaves both blank; add via admin as time allows.
