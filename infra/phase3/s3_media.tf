@@ -48,6 +48,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "media" {
     }
   }
 
+  # Sweep orphaned multipart parts left behind by interrupted uploads
+  # (e.g. SSO token expiry mid-`aws s3 sync` — Session 17 addendum).
+  # Without this rule, aborted parts sit billed as storage indefinitely.
+  # 3 days is well past the longest reasonable retry window for a
+  # legitimate upload and cheap to trigger.
+  rule {
+    id     = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 3
+    }
+  }
+
   depends_on = [aws_s3_bucket_versioning.media]
 }
 

@@ -1,0 +1,355 @@
+# Session 18 — CloudFront www→apex redirect, S3 lifecycle rule, EC2 swap hedge
+
+**Date:** 2026-08-14
+**Mode:** Execution — infra hardening + cleanup
+**Model:** Opus 4.7
+
+---
+
+## Context
+
+Three items from Session 17's handoff, batched into one session:
+
+1. **Fix A — `www` → apex CloudFront 301.** S17 addendum documented
+   the visible bug: `https://www.kaitlynandsteventietheknot.com/gallery/`
+   fails to mount the React island because the static bundle URL is
+   apex-canonical (`AWS_STATIC_CUSTOM_DOMAIN` env is set to the apex),
+   so the `www.` page fetch is cross-origin and blocked by CORS. Fix
+   is a CloudFront Function on the `www.` alias's viewer-request event
+   that 301s to the apex, consolidating on a single canonical origin.
+2. **S3 lifecycle rule for orphaned multipart uploads.** S17 bulk-load
+   left aborted-multipart parts in `s3://<media>/scratch/gallery-source/`
+   after an SSO token expiry mid-`aws s3 sync`. Session 17's cleanup
+   swept them once by hand; this session lands the
+   `abort_incomplete_multipart_upload { days_after_initiation = 3 }`
+   lifecycle rule so the class of leak self-heals. Folded S17's
+   "orphan sweep" carry-over into this — same fix.
+3. **EC2 swap hedge against Pillow OOM.** S17 post-mortem showed the
+   admin upload path shares the same `post_save` derivative-generation
+   code path that OOM'd the box during the 324-photo sync. Adding a
+   1 GB EBS-backed swap file to the instance (via user_data +
+   one-time on-box apply, since `user_data_replace_on_change = false`)
+   turns the OOM into a slow-but-alive burst.
+
+### Skipped from S17's handoff
+- **Delete scratch prefix** — user already ran it last night.
+- **HSTS ramp** — still soak-gated, earliest 2026-08-19.
+- **RDS deletion protection** — calendar item 2027-01/02.
+
+---
+
+## Decisions locked this session
+
+### EC2 swap file — 1 GB, EBS-backed, `vm.swappiness=10`, provisioned via user_data + one-time on-box apply
+
+| Area | Decision |
+|---|---|
+| Choice | Add a swap-file bootstrap block to `infra/phase3/templates/user_data.sh.tftpl` — creates `/swapfile` at 1 GB, `mkswap`+`swapon`, appends to `/etc/fstab` for reboot persistence, drops `vm.swappiness=10` into `/etc/sysctl.d/99-swappiness.conf`. Because `user_data_replace_on_change = false` on `aws_instance.web`, Terraform won't re-run user_data against the live instance; the same commands get applied once by hand via SSM against the current box. Future rebuilds (AMI bump, size change) pick up the change from user_data automatically. |
+| Why | **Why OOM happened.** t3.micro has 1 GB RAM. A single Pillow resize on a 6000×4500 source JPEG allocates a raw pixel buffer of `6000 × 4500 × 3 ≈ 81 MB`, plus a second target-size buffer, plus a transient EXIF-transpose buffer — the working set can hit ~250-300 MB per photo. With three gunicorn workers (~200 MB each), nginx, systemd, SSM Agent, and kernel resident, that spike blows past 1 GB and the kernel OOM killer chooses by process size — gunicorn goes first (fat), then nginx and SSM Agent as pressure continues. The box looks `running` in the EC2 console but is unreachable to everything. **What swap changes.** Swap is a disk-backed extension of virtual memory. When RAM fills, the kernel pages cold pages (idle gunicorn workers waiting for a request, kernel caches, mostly-static SSM Agent memory) out to disk, freeing physical RAM for the hot pages (Pillow's active decode/resize buffers). Nothing gets killed unless RAM + swap are both exhausted. For a bounded burst — one admin photo upload — the spike lasts seconds; swap absorbs it and the OOM killer never fires. **Why not upsize.** t3.small (2 GB RAM) also fixes it but costs an extra ~$15/mo forever for RAM used a few dozen times over the site's lifetime. 1 GB EBS swap costs ~$0.08/mo. **The `swappiness=10` knob.** AL2023 default is 60, which lets the kernel lazily swap cold pages during idle periods. On a "swap as safety net" box, that means gunicorn workers get swapped out during quiet moments and every subsequent cold request pays disk-latency page-in. `swappiness=10` keeps swap unused until RAM pressure is real, so normal request paths never touch disk. **Sizing.** 1 GB gives comfortable headroom for a 2-3× Pillow burst without meaningful impact on the 20 GB root volume. Uses `dd if=/dev/zero` (not `fallocate`) because `fallocate` on XFS can produce a swap file that mkswap rejects; `dd` always works. |
+
+### `www → apex` 301 via nginx server block (not a CloudFront Function)
+
+| Area | Decision |
+|---|---|
+| Choice | Added a second `server` block to `infra/phase3/templates/nginx-site.conf.tftpl` — `listen 80; server_name www.${domain_name}; return 301 https://${domain_name}$request_uri;`. Flipped `ec2.tf` from `file()` → `templatefile()` on the nginx template so `var.domain_name` interpolates in. nginx matches most-specific server_name first, so www hits (forwarded from CloudFront with `Host: www.<apex>` via the AllViewer origin request policy) land in the redirect block; apex hits and EIP-direct debug hits fall through to the existing `default_server`. |
+| Why | S17 addendum proposed a CloudFront Function for the same job. Considered thoroughly at the user's request and rejected: it required a JS file (or ~30 lines of inline JS in HEREDOC) inside the infra module, layering an application concern into infra. The nginx path is 100% Terraform via the existing `.tftpl` mechanism the module already uses. **Coverage analysis:** the CORS bug only manifests when HTML is served from `www.` (because `{% static %}` renders apex-canonical URLs and the browser blocks cross-origin fetches for the JS bundle). Static and media requests to `www.` resolve at CloudFront → S3 directly without touching EC2, and don't cause CORS problems (they're same-origin from the browser's perspective — it's already on www when it fetches them). So catching HTML at nginx is sufficient; canonicalizing /static and /media too would be nice-to-have but is not the bug. **Cost analysis:** `t3.micro` is $7.50/mo flat. nginx `return 301` costs microseconds of CPU per request; even 100K www hits/mo consume <1 min of total CPU, nowhere near the CPU-credit baseline. Edge-latency win of the CloudFront Function path (~30-50ms saved per redirect) does not matter at this traffic pattern. |
+
+### S3 lifecycle — `abort_incomplete_multipart_upload` on media bucket
+
+| Area | Decision |
+|---|---|
+| Choice | Added a second rule to the existing `aws_s3_bucket_lifecycle_configuration.media`: `abort_incomplete_multipart_upload { days_after_initiation = 3 }` with an empty filter (applies to the whole bucket). Kept the existing `expire-noncurrent-versions` rule untouched. |
+| Why | S17 bulk-load hit an SSO token expiry mid-`aws s3 sync` of the 5.2 GB source dump, which left orphaned multipart parts in the media bucket. Aborted parts are billed as storage indefinitely with no natural cleanup path — the S17 addendum swept them once by hand, but any future interrupted upload leaks again. This rule makes the class of leak self-heal within 3 days (well past the longest reasonable retry window for a legitimate upload, so no risk of aborting an in-progress large upload). Also folds in S17's carry-over "orphan sweep" task — same fix in TF form. |
+
+---
+
+## Progress
+
+- [x] Session log created (this file).
+- [x] nginx `www → apex` 301 server block added to `infra/phase3/templates/nginx-site.conf.tftpl`; `ec2.tf` switched to `templatefile()` to pass `var.domain_name`.
+- [x] S3 lifecycle rule `abort-incomplete-multipart-uploads` added to `infra/phase3/s3_media.tf`.
+- [x] Swap-file provisioning added to `infra/phase3/templates/user_data.sh.tftpl` (for future instance rebuilds).
+- [x] `terraform plan` reviewed with user (3 in-place updates: `aws_instance.web` user_data, `aws_s3_bucket_lifecycle_configuration.media`, defensively-re-read `aws_iam_role_policy.github_deploy`); user ran `terraform apply tfplan`.
+- [x] Post-apply: nginx config replaced + reloaded on the live box via SSM (base64 form after paste-indent broke the initial heredoc form — see digression 1 below); swap file provisioned via SSM.
+- [x] Post-apply verification: `curl -I https://www.<apex>/gallery/` returns `HTTP/2 301` with `location: https://<apex>/gallery/`; `curl -I https://<apex>/gallery/` returns `HTTP/2 200` content-length 477506 (regression check); `aws s3api get-bucket-lifecycle-configuration` shows both `expire-noncurrent-versions` and new `abort-incomplete-multipart-uploads` rules Enabled.
+- [x] `CLAUDE.md` amended: new "Terraform commands — user-only" section under Working Contract; matching update to memory `feedback_long_running_commands.md`.
+- [x] Session log finalized (this step).
+
+**On unit tests:** No application code shipped this session — changes are Terraform (nginx template, ec2.tf, s3_media.tf, user_data template) and infra-only. Verification is `terraform validate` + `terraform plan` review + post-apply smoke tests (nginx redirect check via `curl -I https://www.<apex>/gallery/`; swap check via `free -m` in the SSM invocation output; lifecycle rule visible in `aws s3api get-bucket-lifecycle-configuration`). All three landed green. Django test suite still passes at 67/67 from S17 with no changes needed.
+
+## Applying user_data-templated changes to the current live instance
+
+`user_data_replace_on_change = false` and `user_data` only fires on
+first boot anyway, so BOTH changes added to user_data this session
+(the swap block AND the nginx server block for www→apex) take effect
+on **future** instance rebuilds only. The live t3.micro needs a
+one-time on-box apply for each.
+
+### Swap file — two options for the one-time apply.
+
+**Option A — interactive SSM session (easier for one-time work):**
+
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+aws ssm start-session --target "$INSTANCE_ID"
+
+# Then, inside the session:
+sudo bash -c '
+    set -e
+    if [ ! -f /swapfile ]; then
+        dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+        chmod 0600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo "/swapfile none swap sw 0 0" >> /etc/fstab
+    fi
+    cat > /etc/sysctl.d/99-swappiness.conf <<EOF
+vm.swappiness=10
+EOF
+    sysctl -p /etc/sysctl.d/99-swappiness.conf
+    free -m
+    cat /proc/sys/vm/swappiness
+'
+```
+
+`free -m` should show a `Swap:` row with `total ≈ 1024`. `cat
+/proc/sys/vm/swappiness` should print `10`.
+
+**Option B — SSM send-command (scripted, matches deploy pattern):**
+
+Build the payload as real JSON via `jq` — never the `--parameters
+"commands=[...]"` shorthand (S17 CLAUDE.md rule).
+
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+
+BOX_CMD='set -e
+if [ ! -f /swapfile ]; then
+    dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+    chmod 0600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+cat > /etc/sysctl.d/99-swappiness.conf <<EOF
+vm.swappiness=10
+EOF
+sysctl -p /etc/sysctl.d/99-swappiness.conf
+free -m
+cat /proc/sys/vm/swappiness'
+PARAMS=$(jq -n --arg cmd "$BOX_CMD" '{commands: [$cmd]}')
+
+command_id=$(aws ssm send-command \
+    --instance-ids "$INSTANCE_ID" \
+    --document-name AWS-RunShellScript \
+    --comment "S18 swap-file provision" \
+    --parameters "$PARAMS" \
+    --query 'Command.CommandId' --output text)
+echo "Dispatched: $command_id"
+
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID"
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+  --output json \
+  | jq -r '"status: \(.Status)", "----- stdout -----", .StandardOutputContent, "----- stderr -----", .StandardErrorContent'
+```
+
+SSM Send-Command runs as root by default (Systems Manager Agent
+identity), so no `sudo` wrapper needed inside the payload.
+
+Either option is idempotent — the `[ ! -f /swapfile ]` guard makes
+re-running safe.
+
+### nginx config — replace `/etc/nginx/conf.d/wedding-site.conf` and reload
+
+The new `server` block for `www.kaitlynandsteventietheknot.com` needs
+to reach the live nginx before the redirect actually fires. Options
+are the same shape as the swap apply — interactive session or
+send-command. Below is the send-command form; use interactive if you
+prefer to eyeball each step.
+
+Domain is hardcoded here at `kaitlynandsteventietheknot.com` because
+we're rendering the template's `${domain_name}` at write time. If the
+value ever changes (it won't for this project), re-render from
+`infra/phase3/templates/nginx-site.conf.tftpl` accordingly.
+
+```
+INSTANCE_ID=$(terraform -chdir=infra/phase3 output -raw ec2_instance_id)
+
+BOX_CMD='set -e
+cat > /etc/nginx/conf.d/wedding-site.conf <<'"'"'NGINXEOF'"'"'
+upstream gunicorn {
+    server unix:/run/gunicorn/gunicorn.sock;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.kaitlynandsteventietheknot.com;
+
+    return 301 https://kaitlynandsteventietheknot.com$request_uri;
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    client_max_body_size 25M;
+
+    location / {
+        proxy_pass http://gunicorn;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_redirect                     off;
+        proxy_read_timeout                 60s;
+    }
+}
+NGINXEOF
+nginx -t
+systemctl reload nginx'
+PARAMS=$(jq -n --arg cmd "$BOX_CMD" '{commands: [$cmd]}')
+
+command_id=$(aws ssm send-command \
+    --instance-ids "$INSTANCE_ID" \
+    --document-name AWS-RunShellScript \
+    --comment "S18 nginx www->apex redirect apply" \
+    --parameters "$PARAMS" \
+    --query 'Command.CommandId' --output text)
+echo "Dispatched: $command_id"
+
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID"
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+  --output json \
+  | jq -r '"status: \(.Status)", "----- stdout -----", .StandardOutputContent, "----- stderr -----", .StandardErrorContent'
+```
+
+`nginx -t` before `systemctl reload nginx` is deliberate — a syntax
+error in the reload would leave the running config unchanged (good)
+but would fail the SSM invocation, which is the signal to check the
+output before touching the file again.
+
+**Workflow gap flagged for a future session:** nginx config lives in
+a `.tftpl` rendered by `templatefile()` and shipped via user_data,
+but `user_data_replace_on_change = false` means TF apply doesn't
+propagate nginx changes to the live box. Every future nginx change
+needs a manual on-box sync. Options for closing this gap: a
+`null_resource` in TF that fires an SSM send-command on nginx template
+hash change; extending `scripts/deploy.sh` to include an nginx sync
+step; or accepting the manual apply as a rare-enough event. Not
+blocking for S18.
+
+## Files created / modified this session
+
+**Created:**
+- `.claude/sessions/2026-08-14-session-18-cf-www-redirect-lifecycle-and-swap.md` — this log.
+
+**Modified:**
+- `infra/phase3/templates/user_data.sh.tftpl` — added swap-file bootstrap block (1 GB `/swapfile`, `vm.swappiness=10`) between the header setup and `dnf -y update`. Runs only if `/swapfile` doesn't already exist, so re-runs are no-ops.
+- `infra/phase3/templates/nginx-site.conf.tftpl` — added `server_name www.${domain_name}` block that 301s to apex.
+- `infra/phase3/ec2.tf` — flipped `nginx_conf` from `file()` to `templatefile()` so `var.domain_name` interpolates into the nginx template.
+- `infra/phase3/s3_media.tf` — added `abort-incomplete-multipart-uploads` rule to the existing `aws_s3_bucket_lifecycle_configuration.media`.
+- `CLAUDE.md` — new "Terraform commands — user-only" section under Working Contract (all `terraform` subcommands including `plan` are user-run; local read-only inspection like `terraform validate`/`fmt -check` is fine).
+
+Per working contract, all `git add` / `git commit` / `git push` is left
+to the user. Recommended commit message:
+
+    Session 18 — www→apex 301, S3 multipart lifecycle, EC2 swap hedge, CLAUDE.md terraform rule
+
+## Digressions worth remembering
+
+**1. Interactive-shell paste added leading whitespace on multi-line
+SSM `BOX_CMD` heredocs, silently corrupting the target file.**
+
+The first attempt at the nginx apply used a `cat > file <<'NGINXEOF'`
+heredoc inside `BOX_CMD` (single-quoted so `$host` etc stay literal
+for nginx). Pasting the whole block into the interactive shell added
+~2 spaces of leading whitespace to some lines — including the bare
+`NGINXEOF` terminator. `<<'NGINXEOF'` (no `-`) does NOT strip leading
+whitespace before matching, so bash never found the terminator, read
+to EOF, and passed the ENTIRE remainder (config body + `NGINXEOF` +
+`nginx -t` + `systemctl reload nginx`) into the file as heredoc
+content. Symptoms:
+
+- SSM invocation reports `Status: Success` because `cat > file`
+  returned 0 (the heredoc EOF is a warning, not an error). `set -e`
+  did not fire.
+- stdout empty. stderr had one line:
+  `warning: here-document at line 2 delimited by end-of-file (wanted 'NGINXEOF')`.
+- `nginx -t` and `systemctl reload nginx` never ran, so nginx stayed
+  on its OLD config in memory (site stayed up).
+- `/etc/nginx/conf.d/wedding-site.conf` on disk was corrupt (config
+  followed by literal `NGINXEOF`, `nginx -t`, `systemctl reload nginx`).
+  Any future `nginx -s reload` or service restart would have failed
+  syntax validation with the site staying up on the old config only
+  as long as nginx wasn't reload-triggered.
+
+Fix that worked: encoded the nginx config as a single-line base64
+blob locally, then `echo '<b64>' | base64 -d > file` inside `BOX_CMD`.
+No heredoc, no quoting hazards, immune to paste-indent. Same pattern
+applied to the swap command (replaced the `<<EOF` for the sysctl
+file with `echo 'vm.swappiness=10' > /etc/sysctl.d/99-swappiness.conf`).
+
+**Guidance for future sessions:** anything with an embedded heredoc
+inside a `BOX_CMD` should either (a) be encoded as base64 and decoded
+on the box, or (b) be pasted from a local `.sh` file with
+`bash /tmp/foo.sh` rather than pasted directly into the interactive
+shell prompt. Root cause is interactive-shell paste behavior — the
+SSM Send-Command payload itself preserved bytes correctly through
+`jq`, `--parameters "$PARAMS"`, and the AWS-RunShellScript document.
+
+**2. `user_data_replace_on_change = false` means nginx template
+changes never reach the live box without manual on-box apply.**
+
+`ec2.tf`'s `user_data` is templated with the rendered
+`nginx-site.conf.tftpl`. On `terraform apply`, TF sees the user_data
+attribute value change and updates it in state, but does NOT touch
+the running instance's `/etc/nginx/conf.d/wedding-site.conf`
+(because user_data only fires on first boot, and
+`user_data_replace_on_change = false` deliberately blocks a replace).
+Every future nginx config change needs the same on-box sync pattern
+this session used. Workflow-gap options (deferred):
+- Add a `null_resource` in TF that fires an SSM send-command on
+  nginx template hash change (`triggers = { hash = filemd5(...) }`).
+- Extend `scripts/deploy.sh` to include an nginx sync step.
+- Accept manual apply as rare-enough (once every N months) and just
+  script the recipe in each session log.
+
+## Session 19 handoff
+
+**Timing-gated (calendar items, not carry-forward tasks):**
+- **HSTS ramp** — earliest 2026-08-19 (5 days out), gated on
+  ERROR/CRITICAL log filter staying quiet through then. Ramp sequence
+  unchanged from S16 handoff (3600 → 604800 → 31536000 +
+  INCLUDE_SUBDOMAINS → optional PRELOAD).
+- **RDS deletion protection** — flip `aws_db_instance.wedding.deletion_protection`
+  to `true` around T–3 to T–4 months (2027-01/02).
+
+**S19-shape work (see Open questions for full context on each):**
+- **CloudFront cache policy on `/gallery/`** — flagged this session
+  as the top S19 candidate. Bounds cost + latency risk if the wedding
+  link gets shared and 500-5000 relatives hit `/gallery/` in a day.
+- **Photo alt-text / captions** — pipeline supports it; bulk sync
+  left both blank. Admin UI additions as time allows.
+
+**Workflow gaps flagged this session but deferred:**
+- **nginx template → live box sync** — see digression 2 above.
+  Not blocking; the manual on-box recipe works.
+- **Admin-upload OOM guard beyond swap** — swap is the safety net;
+  if it ever kicks in for a real upload, consider the fuller options
+  from S17 handoff (server-side downscale rejection on the model,
+  or move derivative generation to a background job).
+
+## Open questions / follow-ups
+
+*(Carried from S17 unless noted; new items marked NEW.)*
+
+- **NEW — CloudFront cache policy on `/gallery/` (and other cacheable Django pages) to bound cost on a busy day.** The default cache behavior currently uses `CachingDisabled` (`4135ea2d-6df8-44a3-9df3-4b5a84be39ad`), so every HTML page load hits EC2 → gunicorn → Django → RDS. For `/gallery/`, that's a 342 KB HTML payload (mostly the embedded 324-photo JSON) and a full ORM roundtrip per view. If the wedding link gets shared and 500-5000 relatives hit `/gallery/` in a day, EC2 CPU credits could plausibly saturate on `db.t3.micro`+`ec2.t3.micro` — not a cash-cost issue (both are flat-rate), but a throttling-and-latency issue for real viewers. Fix shape: a per-behavior cache policy for `/gallery/` (and maybe `/schedule/`, `/travel/`, others that change infrequently) that caches HTML at CloudFront for 5-15 min, forwarding no cookies/qs into the cache key. `/rsvp/` and `/admin/*` must stay `CachingDisabled` (dynamic per-guest). Bust the cache on admin Photo add/edit via an SSM-triggered CloudFront invalidation or a Django signal that hits the CF `CreateInvalidation` API. Session 19 candidate. Data transfer out is a separate lever (~$0.085/GB after free tier) — caching HTML doesn't reduce image transfer, but it does keep the site responsive during traffic spikes and reduce derivative/query load if we later add view-count analytics.
+- **HSTS ramp** — earliest 2026-08-19, gated on ERROR/CRITICAL log filter staying quiet.
+- **RDS deletion protection** — flip 2027-01/02.
+- **Photo alt-text / captions** — bulk sync leaves both blank; add via admin as time allows.
+- **`<picture>` mobile crop for hero** — carried from S15.
+- **`django-vite`** — deferred, not blocking.
+- **Q1 dietary + Q6 schedule** — open from Session 7 (RSVP).
