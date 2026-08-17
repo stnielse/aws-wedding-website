@@ -100,28 +100,6 @@ resource "aws_cloudfront_distribution" "web" {
     origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
   }
 
-  # --- /gallery* -> ec2-web (cached at edge) -----------------------------
-  # Gallery page is read-only, identical for every viewer, and
-  # expensive per-hit (324 Photo rows serialized into a 342 KB HTML
-  # payload with an inline JSON island). See Session 19 for the full
-  # rationale on TTL choice and why auto-invalidation is deferred.
-  # AllViewer origin request policy stays so Host forwards to Django
-  # (build_absolute_uri needs the apex hostname). Custom cache policy
-  # below strips cookies/qs/headers from the cache key — one entry per
-  # (path, accept-encoding).
-
-  ordered_cache_behavior {
-    path_pattern           = "/gallery*"
-    target_origin_id       = "ec2-web"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-
-    cache_policy_id          = aws_cloudfront_cache_policy.gallery.id
-    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer
-  }
-
   # --- /media/* -> S3 media bucket ---------------------------------------
 
   ordered_cache_behavior {
@@ -147,6 +125,31 @@ resource "aws_cloudfront_distribution" "web" {
     compress               = true
 
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  }
+
+  # --- /gallery* -> ec2-web (cached at edge) -----------------------------
+  # Gallery page is read-only, identical for every viewer, and
+  # expensive per-hit (324 Photo rows serialized into a 342 KB HTML
+  # payload with an inline JSON island). See Session 19 for the full
+  # rationale on TTL choice and why auto-invalidation is deferred.
+  # AllViewer origin request policy stays so Host forwards to Django
+  # (build_absolute_uri needs the apex hostname). Custom cache policy
+  # below strips cookies/qs/headers from the cache key — one entry per
+  # (path, accept-encoding). Placed after /media/* and /static/* so
+  # Terraform's positional list tracking doesn't shuffle those existing
+  # entries -- path patterns don't overlap, so evaluation order between
+  # these three is functionally irrelevant.
+
+  ordered_cache_behavior {
+    path_pattern           = "/gallery*"
+    target_origin_id       = "ec2-web"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    cache_policy_id          = aws_cloudfront_cache_policy.gallery.id
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer
   }
 
   restrictions {
