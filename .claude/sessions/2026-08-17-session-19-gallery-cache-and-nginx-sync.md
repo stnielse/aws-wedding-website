@@ -77,7 +77,8 @@ Two items from Session 18's handoff, batched into one session:
 - [x] `scripts/deploy.sh` — nginx sync step inserted between Python deps and frontend tar extract; sources `.env` for `$DOMAIN`, uses `envsubst '${domain_name}'` whitelist, `cmp -s` diffs, sudo-invokes the helper only on change.
 - [x] `infra/phase3/templates/user_data.sh.tftpl` — sudoers entry extended with the helper path; `gettext` added to the `dnf install` list so `envsubst` is present on future rebuilds (current box may need it installed if missing — see below).
 - [x] Local pre-plan checks: `terraform validate` passes; `terraform fmt -check cloudfront.tf` clean; `bash -n` clean on both shell files; `envsubst` rendering verified to substitute `${domain_name}` only and preserve `$host`/`$request_uri`/`$scheme` literally; Django tests 67/67 still passing.
-- [ ] `terraform plan` reviewed with user; `terraform apply tfplan` run. Expected diff: one new resource (`aws_cloudfront_cache_policy.gallery`), one in-place update to `aws_cloudfront_distribution.web` (new `ordered_cache_behavior`), one in-place update to `aws_instance.web` user_data (new sudoers line + `gettext` added to dnf install — no replace since `user_data_replace_on_change = false`).
+- [x] `terraform plan` reviewed with user — hit two issues on first plan; both fixed. See [Digressions](#digressions-worth-remembering) below. Re-plan expected diff: one new resource (`aws_cloudfront_cache_policy.gallery`), one in-place update to `aws_cloudfront_distribution.web` (single new `ordered_cache_behavior` appended after `/static/*`), one in-place update to `aws_instance.web` user_data (now `user_data_base64`, computed content, no replace since `user_data_replace_on_change = false`). S3 bucket policy diffs from the first plan should no longer appear.
+- [ ] `terraform apply tfplan` run.
 - [ ] Post-apply: one-time SSM patch of `/etc/sudoers.d/wedding-site-deploy` on the live box (recipe below). Also check `command -v envsubst` on the live box — if missing, `sudo dnf -y install gettext` via SSM (or the same send-command shape). Every AL2023 install I've seen has `gettext` present as part of the base image, but worth a quick check before the first deploy.
 - [ ] Post-apply verification: `curl -I https://<apex>/gallery/` shows a CloudFront `age` header increment on the second request within 5 min (proof cache is populated); no-op deploy prints `nginx config unchanged; skipping sync`; a trivial template edit + push prints `nginx config changed; syncing` and reloads nginx without error.
 - [ ] Session log finalized.
@@ -171,6 +172,35 @@ Per working contract, all `git add` / `git commit` / `git push` is left
 to the user. Recommended commit message:
 
     Session 19 — CloudFront /gallery/ cache policy, nginx sync in deploy path
+
+## Digressions worth remembering
+
+**1. `aws_instance.user_data` hard-limits at 16 KB; adding one sudoers line + one dnf package tipped the wedding-site bootstrap over.**
+
+First `terraform plan` for this session failed with:
+```
+Error: expected length of user_data to be in the range (0 - 16384), got #!/bin/bash…
+```
+The AL2023 bootstrap in `user_data.sh.tftpl` had been sitting comfortably around ~14 KB since Session 15. Session 18 (swap block) pushed it up a bit, and Session 19's additions (`gettext` in the dnf list, one more path in the sudoers grant, extended sudoers comment) tipped it past 16,384 bytes.
+
+**Fix:** switched `aws_instance.web` from `user_data = templatefile(...)` to `user_data_base64 = base64gzip(templatefile(...))`. cloud-init on AL2023 detects gzip magic bytes at the start of user_data and decompresses transparently before executing — no on-box change needed. Base64 wrapping is required because `user_data_base64` expects an already-encoded string. gzip + base64 packed the ~15 KB rendered script to ~6-7 KB, giving comfortable headroom for future additions.
+
+**Guidance:** future user_data edits should keep an eye on the compressed size (approximate: `wc -c` on the raw template + inline `nginx-main.conf.tftpl`/`nginx-site.conf.tftpl`/`gunicorn.service.tftpl` contents, then `| gzip | base64 | wc -c` for the encoded footprint). If it ever crosses ~12 KB compressed, start factoring cold-content (systemd unit, nginx configs) out to SSM parameters and fetching them at boot instead of baking them into user_data.
+
+**2. `ordered_cache_behavior` is a positional list, not a set — inserting a new block at position 0 shuffles every downstream block into a "changed" diff.**
+
+First plan showed `ordered_cache_behavior` diffs like:
+```
+~ ordered_cache_behavior {
+    ~ path_pattern     = "/media/*" -> "/gallery*"
+    ~ target_origin_id = "s3-media" -> "ec2-web"
+    ...
+```
+Not what actually would happen at CloudFront — the resulting live distribution would still have `/media/*`, `/static/*`, `/gallery*` behaviors — but Terraform tracks them by list index and re-diffs each position when the list grows. Worse, the reshuffle made `cache_policy_id` at position 0 reference `aws_cloudfront_cache_policy.gallery.id` (a resource being created), which cascaded to the distribution's `arn` being `(known after apply)`, which forced both `aws_s3_bucket_policy.media` and `aws_s3_bucket_policy.static` into `(known after apply)` diffs too.
+
+**Fix:** moved the new `/gallery*` block to the END of the ordered_cache_behavior list (after `/media/*` and `/static/*`). Existing blocks stay byte-identical, only position 2 is new. S3 bucket policy diffs should disappear on the re-plan. Path patterns don't overlap, so evaluation-order change is functionally a no-op at CloudFront.
+
+**Guidance:** append new ordered_cache_behavior blocks unless there's a semantic reason to insert them earlier (path pattern overlap with an existing block — first match wins in CloudFront's evaluation). Adding "logically first" is a Terraform-diff hazard, not a CloudFront correctness win.
 
 ## Open questions / follow-ups
 

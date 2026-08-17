@@ -15,6 +15,13 @@
 #     starts gunicorn + nginx. Idempotent-ish and self-logging to
 #     /var/log/user-data.log.
 #
+# user_data_base64 + base64gzip: the rendered bootstrap script exceeded
+# the 16 KB `user_data` attribute limit after Session 19's additions
+# (gettext dnf entry + extended sudoers). cloud-init on AL2023 detects
+# gzip magic bytes and decompresses transparently, and base64gzip
+# packs the ~15 KB script into ~5 KB. Same file, same behavior on the
+# box -- just wrapped for transport.
+#
 # user_data_replace_on_change = false: we intentionally do NOT want a
 # script tweak to recreate the instance. If we edit the bootstrap and
 # need it re-run, SSM into the box and run it manually (or rebuild via
@@ -39,7 +46,7 @@ resource "aws_instance" "web" {
   vpc_security_group_ids = [aws_security_group.ec2.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
-  user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
+  user_data_base64 = base64gzip(templatefile("${path.module}/templates/user_data.sh.tftpl", {
     app_dir    = "/home/ec2-user/aws-wedding-website"
     repo_url   = "https://github.com/stnielse/aws-wedding-website.git"
     ssm_prefix = local.ssm_prefix
@@ -51,7 +58,7 @@ resource "aws_instance" "web" {
     nginx_conf = templatefile("${path.module}/templates/nginx-site.conf.tftpl", {
       domain_name = var.domain_name
     })
-  })
+  }))
   user_data_replace_on_change = false
 
   metadata_options {
