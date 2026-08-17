@@ -44,6 +44,36 @@ git checkout --detach "$GIT_SHA"
     --disable-pip-version-check \
     -r backend/requirements/production.txt
 
+# ---- Nginx site config sync --------------------------------------------
+# Render infra/phase3/templates/nginx-site.conf.tftpl with $DOMAIN
+# substituted for ${domain_name}, diff against the live file, and only
+# reload nginx if something changed. Same source of truth as user_data
+# uses for a fresh instance -- avoids the S18 workflow gap where nginx
+# template changes never reached the live box because
+# user_data_replace_on_change = false.
+#
+# envsubst's whitelist form (only '${domain_name}') is load-bearing:
+# the template also contains nginx runtime variables ($host,
+# $request_uri, $scheme) that would be clobbered as empty shell vars
+# by bare envsubst. .env is sourced further down for migrate/collectstatic;
+# source it here too so $DOMAIN is available.
+set -a
+. "$APP_DIR/backend/.env"
+set +a
+NGINX_TEMPLATE="$APP_DIR/infra/phase3/templates/nginx-site.conf.tftpl"
+NGINX_LIVE=/etc/nginx/conf.d/wedding-site.conf
+NGINX_NEW=/tmp/wedding-site.conf.new
+domain_name="$DOMAIN" envsubst '${domain_name}' \
+    < "$NGINX_TEMPLATE" \
+    > "$NGINX_NEW"
+if cmp -s "$NGINX_NEW" "$NGINX_LIVE"; then
+    echo "nginx config unchanged; skipping sync"
+    rm -f "$NGINX_NEW"
+else
+    echo "nginx config changed; syncing"
+    sudo "$APP_DIR/scripts/wedding-nginx-sync.sh"
+fi
+
 # ---- Frontend (pre-built by CI, downloaded from S3) ---------------------
 # The tarball's contents unpack directly into backend/static/frontend/
 # (tar was created with -C backend/static/frontend .). Wipe the target
