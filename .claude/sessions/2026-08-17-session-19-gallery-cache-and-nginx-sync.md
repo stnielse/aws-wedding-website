@@ -79,9 +79,9 @@ Two items from Session 18's handoff, batched into one session:
 - [x] Local pre-plan checks: `terraform validate` passes; `terraform fmt -check cloudfront.tf` clean; `bash -n` clean on both shell files; `envsubst` rendering verified to substitute `${domain_name}` only and preserve `$host`/`$request_uri`/`$scheme` literally; Django tests 67/67 still passing.
 - [x] `terraform plan` reviewed with user — hit two issues on first plan; both fixed. See [Digressions](#digressions-worth-remembering) below. Re-plan expected diff: one new resource (`aws_cloudfront_cache_policy.gallery`), one in-place update to `aws_cloudfront_distribution.web` (single new `ordered_cache_behavior` appended after `/static/*`), one in-place update to `aws_instance.web` user_data (now `user_data_base64`, computed content, no replace since `user_data_replace_on_change = false`). S3 bucket policy diffs from the first plan should no longer appear.
 - [ ] `terraform apply tfplan` run.
-- [ ] Post-apply: one-time SSM patch of `/etc/sudoers.d/wedding-site-deploy` on the live box (recipe below). Also check `command -v envsubst` on the live box — if missing, `sudo dnf -y install gettext` via SSM (or the same send-command shape). Every AL2023 install I've seen has `gettext` present as part of the base image, but worth a quick check before the first deploy.
-- [ ] Post-apply verification: `curl -I https://<apex>/gallery/` shows a CloudFront `age` header increment on the second request within 5 min (proof cache is populated); no-op deploy prints `nginx config unchanged; skipping sync`; a trivial template edit + push prints `nginx config changed; syncing` and reloads nginx without error.
-- [ ] Session log finalized.
+- [x] Post-apply: one-time SSM patch of `/etc/sudoers.d/wedding-site-deploy` applied to the live box; `visudo -c` accepted the new file; `envsubst` confirmed present at `/usr/bin/envsubst`. Verification via `sudo -l -U ec2-user` surfaced an unrelated finding — see [Digression 3](#digressions-worth-remembering) — but does not block S19.
+- [x] Post-apply verification (partial, sufficient for session close): `curl -sI https://kaitlynandsteventietheknot.com/gallery/` twice ~3 s apart showed the `age` header incrementing by 3 (`age: 0` → `age: 3`), proving the `/gallery*` cache behavior is live at CloudFront and the entry is being served from edge cache. Full deploy-path verification (no-op sync on first deploy, then a trivial template edit to prove sync-on-change) is deferred to the CI push flow — user will merge the PR through the normal main-gate, with an emergency direct-to-main push as fallback if the deploy fails on the new nginx sync step.
+- [x] Session log finalized.
 
 **On unit tests:** No application code shipped this session — changes are Terraform (`cloudfront.tf`), shell (`deploy.sh`, new `wedding-nginx-sync.sh`), and the sudoers line in `user_data.sh.tftpl`. Verification is `terraform validate` + `terraform plan` review + post-apply smoke tests (CloudFront `age` header check, deploy dry-run showing no-op path, deploy path showing sync-on-change). Django test suite still passes at 67/67 from S17 with no changes needed.
 
@@ -202,10 +202,33 @@ Not what actually would happen at CloudFront — the resulting live distribution
 
 **Guidance:** append new ordered_cache_behavior blocks unless there's a semantic reason to insert them earlier (path pattern overlap with an existing block — first match wins in CloudFront's evaluation). Adding "logically first" is a Terraform-diff hazard, not a CloudFront correctness win.
 
+**3. ec2-user has global `(ALL) NOPASSWD: ALL` via cloud-init's default `/etc/sudoers.d/90-cloud-init-users` — our narrow NOPASSWD grants are decorative.**
+
+Surfaced during the S19 sudoers verification. `sudo -l -U ec2-user` on the box:
+```
+User ec2-user may run the following commands on ip-10-0-1-77:
+    (ALL) ALL
+    (ALL) NOPASSWD: ALL
+    (root) NOPASSWD: /bin/systemctl restart gunicorn, /home/ec2-user/aws-wedding-website/scripts/wedding-nginx-sync.sh
+```
+
+The first `(ALL) NOPASSWD: ALL` grant comes from `/etc/sudoers.d/90-cloud-init-users` (128 bytes, present on every AL2023 EC2 instance out of the box). It grants ec2-user passwordless sudo to everything, which is what has actually been letting `scripts/deploy.sh` run `sudo /bin/systemctl restart gunicorn` for the past four sessions — the narrow `wedding-site-deploy` sudoers file we've been carefully maintaining has been redundant the whole time. Also explains why the S19 patch found the file missing without any deploy having failed: the global grant was covering.
+
+**Security posture implication:** the least-privilege intent of the narrow entries is defeated. Anything that lands as ec2-user (via SSM SendCommand, a compromised deploy script, or any RCE in the Django app that escalates to the app-user shell) can `sudo` anything. Removing cloud-init's grant is a real hardening lever but has to be done carefully — SSM Session Manager access should stay usable, and any admin recovery paths that depend on `sudo -i` need alternatives lined up first. Not in scope for S19. Added to open questions as an S20+ security-hardening candidate.
+
 ## Open questions / follow-ups
 
 *(Carried from S18 unless noted; new items marked NEW.)*
 
+- **NEW — Remove or narrow cloud-init's `(ALL) NOPASSWD: ALL` grant to
+  ec2-user (`/etc/sudoers.d/90-cloud-init-users`).** Surfaced during
+  the S19 sudoers verification (Digression 3). Current global grant
+  makes every narrow NOPASSWD entry in `wedding-site-deploy`
+  decorative. Real hardening lever but has to be done carefully to
+  avoid breaking SSM Session Manager admin access. Terraform can drop
+  a replacement `/etc/sudoers.d/00-cloud-init-users` in user_data
+  (higher precedence via lower number) that grants ec2-user only what
+  SSM + our narrow entries need. Own session — nontrivial rollback plan.
 - **NEW — Auto-invalidation on Photo save/delete.** Deferred from
   this session. If wedding link goes viral and admin edits during
   peak traffic become common, add a `post_save`/`post_delete` signal
