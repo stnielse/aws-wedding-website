@@ -72,13 +72,14 @@ Two items from Session 18's handoff, batched into one session:
 ## Progress
 
 - [x] Session log created (this file).
-- [ ] `infra/phase3/cloudfront.tf` — add `aws_cloudfront_cache_policy.gallery` + `ordered_cache_behavior` for `/gallery*`.
-- [ ] `scripts/wedding-nginx-sync.sh` — new helper: backup + cp + validate + rollback + reload.
-- [ ] `scripts/deploy.sh` — insert nginx sync step between Python deps and Django migrate.
-- [ ] `infra/phase3/templates/user_data.sh.tftpl` — extend sudoers entry with the new helper path.
-- [ ] `terraform plan` reviewed with user; `terraform apply tfplan` run.
-- [ ] Post-apply: one-time SSM patch of `/etc/sudoers.d/wedding-site-deploy` on the live box (recipe below).
-- [ ] Post-apply verification: `curl -I https://<apex>/gallery/` shows a CloudFront `age` header increment on the second request within 5 min (proof cache is populated); deploy.sh dry-runnable check (see [Verification](#verification)); nginx unchanged after a no-op deploy; nginx changes propagate after a template edit + push.
+- [x] `infra/phase3/cloudfront.tf` — add `aws_cloudfront_cache_policy.gallery` + `ordered_cache_behavior` for `/gallery*`.
+- [x] `scripts/wedding-nginx-sync.sh` — new helper: backup + cp + validate + rollback + reload. Chmod +x.
+- [x] `scripts/deploy.sh` — nginx sync step inserted between Python deps and frontend tar extract; sources `.env` for `$DOMAIN`, uses `envsubst '${domain_name}'` whitelist, `cmp -s` diffs, sudo-invokes the helper only on change.
+- [x] `infra/phase3/templates/user_data.sh.tftpl` — sudoers entry extended with the helper path; `gettext` added to the `dnf install` list so `envsubst` is present on future rebuilds (current box may need it installed if missing — see below).
+- [x] Local pre-plan checks: `terraform validate` passes; `terraform fmt -check cloudfront.tf` clean; `bash -n` clean on both shell files; `envsubst` rendering verified to substitute `${domain_name}` only and preserve `$host`/`$request_uri`/`$scheme` literally; Django tests 67/67 still passing.
+- [ ] `terraform plan` reviewed with user; `terraform apply tfplan` run. Expected diff: one new resource (`aws_cloudfront_cache_policy.gallery`), one in-place update to `aws_cloudfront_distribution.web` (new `ordered_cache_behavior`), one in-place update to `aws_instance.web` user_data (new sudoers line + `gettext` added to dnf install — no replace since `user_data_replace_on_change = false`).
+- [ ] Post-apply: one-time SSM patch of `/etc/sudoers.d/wedding-site-deploy` on the live box (recipe below). Also check `command -v envsubst` on the live box — if missing, `sudo dnf -y install gettext` via SSM (or the same send-command shape). Every AL2023 install I've seen has `gettext` present as part of the base image, but worth a quick check before the first deploy.
+- [ ] Post-apply verification: `curl -I https://<apex>/gallery/` shows a CloudFront `age` header increment on the second request within 5 min (proof cache is populated); no-op deploy prints `nginx config unchanged; skipping sync`; a trivial template edit + push prints `nginx config changed; syncing` and reloads nginx without error.
 - [ ] Session log finalized.
 
 **On unit tests:** No application code shipped this session — changes are Terraform (`cloudfront.tf`), shell (`deploy.sh`, new `wedding-nginx-sync.sh`), and the sudoers line in `user_data.sh.tftpl`. Verification is `terraform validate` + `terraform plan` review + post-apply smoke tests (CloudFront `age` header check, deploy dry-run showing no-op path, deploy path showing sync-on-change). Django test suite still passes at 67/67 from S17 with no changes needed.
