@@ -90,6 +90,7 @@ dnf -y install \
     jq \
     tar \
     gzip \
+    gettext \
     amazon-cloudwatch-agent
 
 # Pin node 22 in alternatives in case dnf ordering ever changes.
@@ -258,11 +259,16 @@ chmod 0644 /etc/logrotate.d/gunicorn
 # Passwordless sudo for the deploy path.
 #
 # scripts/deploy.sh runs as ec2-user via SSM SendCommand and needs to
-# restart gunicorn after every push-to-main. NOPASSWD is scoped to
-# exactly that command -- ec2-user cannot sudo anything else.
+# (a) restart gunicorn after every push-to-main and (b) sync the nginx
+# site config when the template changes (Session 19 -- closes the gap
+# where user_data-templated nginx changes never reached the live box
+# because user_data_replace_on_change = false). NOPASSWD is scoped to
+# exactly those two absolute paths -- ec2-user cannot sudo anything
+# else. The nginx sync target is a script in the repo checkout, so
+# git deploys carry its implementation without sudoers changes.
 # --------------------------------------------------------------------------
 cat > /etc/sudoers.d/wedding-site-deploy <<'SUDOERSEOF'
-ec2-user ALL=(root) NOPASSWD: /bin/systemctl restart gunicorn
+ec2-user ALL=(root) NOPASSWD: /bin/systemctl restart gunicorn, /home/ec2-user/aws-wedding-website/scripts/wedding-nginx-sync.sh
 SUDOERSEOF
 chmod 0440 /etc/sudoers.d/wedding-site-deploy
 visudo -c -f /etc/sudoers.d/wedding-site-deploy

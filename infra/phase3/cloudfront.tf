@@ -127,6 +127,31 @@ resource "aws_cloudfront_distribution" "web" {
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
   }
 
+  # --- /gallery* -> ec2-web (cached at edge) -----------------------------
+  # Gallery page is read-only, identical for every viewer, and
+  # expensive per-hit (324 Photo rows serialized into a 342 KB HTML
+  # payload with an inline JSON island). See Session 19 for the full
+  # rationale on TTL choice and why auto-invalidation is deferred.
+  # AllViewer origin request policy stays so Host forwards to Django
+  # (build_absolute_uri needs the apex hostname). Custom cache policy
+  # below strips cookies/qs/headers from the cache key — one entry per
+  # (path, accept-encoding). Placed after /media/* and /static/* so
+  # Terraform's positional list tracking doesn't shuffle those existing
+  # entries -- path patterns don't overlap, so evaluation order between
+  # these three is functionally irrelevant.
+
+  ordered_cache_behavior {
+    path_pattern           = "/gallery*"
+    target_origin_id       = "ec2-web"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    cache_policy_id          = aws_cloudfront_cache_policy.gallery.id
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
@@ -141,4 +166,39 @@ resource "aws_cloudfront_distribution" "web" {
 
   # Instance replace keeps the same EIP, so the ec2-web origin domain is
   # stable across replaces -- no distribution churn needed.
+}
+
+# --------------------------------------------------------------------------
+# Custom cache policy for /gallery* (Session 19).
+#
+# 5-min default TTL bounds cost + latency risk on a viral wedding link
+# without making admin edits feel stale. `origin` Cache-Control response
+# headers can override up to max_ttl (15 min); Django doesn't emit any,
+# so default_ttl wins in practice.
+#
+# No cookies/qs/headers in the cache key -- the page is identical for
+# every viewer. Brotli + gzip in the key so browsers get the encoding
+# they support (two cache entries per URL, negligible storage).
+# --------------------------------------------------------------------------
+resource "aws_cloudfront_cache_policy" "gallery" {
+  name        = "${var.project_tag}-gallery-cache"
+  comment     = "5-min TTL cache for the /gallery/ page and any /gallery* Django routes."
+  min_ttl     = 60
+  default_ttl = 300
+  max_ttl     = 900
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+
+    cookies_config {
+      cookie_behavior = "none"
+    }
+    headers_config {
+      header_behavior = "none"
+    }
+    query_strings_config {
+      query_string_behavior = "none"
+    }
+  }
 }
