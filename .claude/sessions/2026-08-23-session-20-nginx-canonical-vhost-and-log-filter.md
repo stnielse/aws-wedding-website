@@ -82,7 +82,7 @@ Both trace back to nginx's `server_name _;` default_server proxying
 - [x] `backend/config/log_formatters.py` — `SkipClient4xx` filter class appended.
 - [x] `backend/config/settings/production.py` — `LOGGING['filters']` section added; filter attached to `django.request`.
 - [x] Unit tests — `SkipClient4xxTests` (5 cases: drops 404, drops all 4xx incl. 400/401/403/418/429/499, keeps 5xx, boundary at 500, keeps records with no `status_code` attr) + `ProductionLoggingWiringTests` (3 cases: filter registered in `LOGGING['filters']`, attached to `django.request`, level stays WARNING). 75/75 passing including the pre-existing 67.
-- [ ] Local smoke: `envsubst '${domain_name}' < infra/phase3/templates/nginx-site.conf.tftpl` renders cleanly with `$host`/`$request_uri`/`$scheme` preserved; `nginx -t -c /tmp/rendered.conf` in a container/VM validates syntax.
+- [x] Local smoke: envsubst whitelist verified — `diff` shows only the three `${domain_name}` → `kaitlynandsteventietheknot.com` substitutions on lines 17/19/25; `$request_uri` on line 19 (same line as `${domain_name}`) stayed literal, which is the exact load-bearing case for the whitelist form. `docker run --rm -v /tmp/wedding-rendered.conf:/etc/nginx/conf.d/wedding-site.conf:ro nginx:alpine nginx -t` passed.
 - [ ] Deploy to prod via merge to main; watch `/wedding-site/django` for the DisallowedHost ERROR count to drop to zero over the following 24h.
 - [ ] Handoff update: HSTS ramp (S19 open item) unblocks once the ERROR count stays quiet for the S15 soak window.
 
