@@ -134,6 +134,12 @@ LOGGING = {
     'formatters': {
         'json': {'()': 'config.log_formatters.JsonFormatter'},
     },
+    'filters': {
+        # See log_formatters.SkipClient4xx: silences the 4xx WARNING
+        # spam bots produce probing /.env, /wp-admin, etc. without
+        # muting 5xx.
+        'skip_client_4xx': {'()': 'config.log_formatters.SkipClient4xx'},
+    },
     'handlers': {
         'stderr': {
             'class': 'logging.StreamHandler',
@@ -150,9 +156,13 @@ LOGGING = {
         'django.request': {
             # Django logs 4xx at WARNING and 5xx at ERROR under this logger;
             # bumping the floor to WARNING skips the noisy request-completed
-            # DEBUG chatter we don't want in prod.
+            # DEBUG chatter we don't want in prod. The skip_client_4xx
+            # filter then drops route-not-found + client-error WARNINGs
+            # (constant background scan traffic) while letting every 5xx
+            # through to the django-errors alarm.
             'level': 'WARNING',
             'handlers': ['stderr'],
+            'filters': ['skip_client_4xx'],
             'propagate': False,
         },
     },

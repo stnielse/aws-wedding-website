@@ -2,12 +2,15 @@ upstream gunicorn {
     server unix:/run/gunicorn/gunicorn.sock;
 }
 
-# 301 redirect www.<apex> -> <apex>. Nginx matches server_name most-specific
-# first, so requests forwarded from CloudFront with Host: www.<apex> land
-# here; everything else (apex, EIP direct hits) falls to the default_server
-# block below. See Session 18 for why we consolidate on a single canonical
-# origin (CORS block on the static bundle URL, which is apex-hardcoded via
-# AWS_STATIC_CUSTOM_DOMAIN).
+# nginx picks the most-specific server_name first, so the three blocks
+# below sort themselves: www -> apex 301, canonical -> gunicorn, and
+# everything else (EIP hits, ec2-*.compute-1.amazonaws.com scans, bare
+# `Host: _`) lands in the default_server 444 at the bottom. Session 20
+# tightened this from a single default_server after a scanner spray on
+# the EC2 hostname raised ~250 DisallowedHost ERRORs and paged the
+# wedding-site-django-errors alarm; keeping wrong-Host traffic out of
+# Django is the reason that alarm now stays quiet.
+
 server {
     listen 80;
     listen [::]:80;
@@ -17,15 +20,25 @@ server {
 }
 
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
+    listen 80;
+    listen [::]:80;
+    server_name ${domain_name};
 
     client_max_body_size 25M;
 
-    # Static + media are on S3 (via django-storages), served directly from
-    # the bucket regional URL until Session 13 wires CloudFront. nginx
-    # doesn't need to serve /static/ or /media/ this session.
+    # Scanner-probe short-circuits. None of these paths exist on this
+    # site (no PHP, no WordPress, no dotfiles served), so we drop them
+    # at nginx with 444 (close connection) + access_log off before they
+    # wake gunicorn or land in the Django CloudWatch stream. Add a new
+    # pattern as a one-liner when a fresh wave shows up in the log.
+    location ~* /\.(?:env|git|aws|ssh|htaccess|htpasswd) {
+        access_log off;
+        return 444;
+    }
+    location ~* /(?:wp-(?:admin|login|content|includes|config|json)|xmlrpc\.php|phpmyadmin|phpMyAdmin|pma)(?:/|$) {
+        access_log off;
+        return 444;
+    }
 
     location / {
         proxy_pass http://gunicorn;
@@ -37,4 +50,17 @@ server {
         proxy_redirect                     off;
         proxy_read_timeout                 60s;
     }
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    # Wrong Host header -> silent close. CloudFront forwards the viewer
+    # Host header verbatim, so all legitimate traffic hits the canonical
+    # server block above. Requests reaching this block came in on the
+    # EC2 public DNS name, the EIP, or with a bogus Host; none deserve
+    # a response and none should reach Django.
+    return 444;
 }

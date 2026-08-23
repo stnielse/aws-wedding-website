@@ -12,7 +12,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from config.log_formatters import JsonFormatter
+from config.log_formatters import JsonFormatter, SkipClient4xx
 from config.storage_backends import ManifestS3StaticStorage
 
 
@@ -95,6 +95,90 @@ class JsonFormatterTests(SimpleTestCase):
 
         payload = self._format(self._make_record(thing=Weird()))
         self.assertEqual(payload['thing'], 'weird-repr')
+
+
+class SkipClient4xxTests(SimpleTestCase):
+    """SkipClient4xx drops 4xx WARNING records from django.request (bot
+    scanner noise) and keeps everything else. See Session 20."""
+
+    def setUp(self):
+        self.filter = SkipClient4xx()
+
+    def _make_record(self, level=logging.WARNING, **extra):
+        record = logging.LogRecord(
+            name='django.request',
+            level=level,
+            pathname=__file__,
+            lineno=1,
+            msg='Not Found: %s',
+            args=('/wp-admin/install.php',),
+            exc_info=None,
+        )
+        for key, value in extra.items():
+            setattr(record, key, value)
+        return record
+
+    def test_drops_404(self):
+        # The prototypical case: bots probing /.env, /wp-admin, etc.
+        self.assertFalse(self.filter.filter(self._make_record(status_code=404)))
+
+    def test_drops_all_4xx(self):
+        for status in (400, 401, 403, 404, 418, 429, 499):
+            with self.subTest(status=status):
+                record = self._make_record(status_code=status)
+                self.assertFalse(self.filter.filter(record))
+
+    def test_keeps_5xx(self):
+        # 5xx must never be filtered -- these are what the django-errors
+        # CloudWatch alarm exists to catch.
+        for status in (500, 502, 503, 504):
+            with self.subTest(status=status):
+                record = self._make_record(level=logging.ERROR, status_code=status)
+                self.assertTrue(self.filter.filter(record))
+
+    def test_keeps_boundary_at_500(self):
+        # Strict >= 500 boundary: 499 out, 500 in.
+        self.assertFalse(self.filter.filter(self._make_record(status_code=499)))
+        self.assertTrue(self.filter.filter(self._make_record(status_code=500)))
+
+    def test_keeps_records_without_status_code(self):
+        # Defense-in-depth: non-request logs routed through a shared
+        # handler must not be silently swallowed. Only status-bearing 4xx
+        # records get dropped.
+        record = self._make_record()
+        self.assertFalse(hasattr(record, 'status_code'))
+        self.assertTrue(self.filter.filter(record))
+
+
+class ProductionLoggingWiringTests(SimpleTestCase):
+    """Verify the LOGGING dict in production.settings wires SkipClient4xx
+    onto django.request. Guards against the filter class existing but
+    silently unhooked -- the failure mode that would let the whole class
+    of scanner-noise WARNINGs back into CloudWatch."""
+
+    def test_skip_client_4xx_registered_as_filter(self):
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertIn('skip_client_4xx', module.LOGGING['filters'])
+        self.assertEqual(
+            module.LOGGING['filters']['skip_client_4xx']['()'],
+            'config.log_formatters.SkipClient4xx',
+        )
+
+    def test_django_request_logger_uses_the_filter(self):
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        request_logger = module.LOGGING['loggers']['django.request']
+        self.assertIn('skip_client_4xx', request_logger.get('filters', []))
+
+    def test_django_request_level_stays_warning(self):
+        # Filter is the gate, not the level. Bumping the level to ERROR
+        # would double up the muting and hide 4xx records from any future
+        # filter change; keep the level at WARNING so intent stays in one
+        # place.
+        with mock.patch.dict(os.environ, _PROD_BASE_ENV, clear=True):
+            module = _reimport_production()
+        self.assertEqual(module.LOGGING['loggers']['django.request']['level'], 'WARNING')
 
 
 class AllowedHostsParsingTests(SimpleTestCase):
