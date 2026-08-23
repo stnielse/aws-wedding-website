@@ -81,7 +81,7 @@ Both trace back to nginx's `server_name _;` default_server proxying
 - [x] `infra/phase3/templates/nginx-site.conf.tftpl` — rewritten: canonical vhost, scanner-pattern location blocks, default_server 444.
 - [x] `backend/config/log_formatters.py` — `SkipClient4xx` filter class appended.
 - [x] `backend/config/settings/production.py` — `LOGGING['filters']` section added; filter attached to `django.request`.
-- [ ] Unit tests — filter behavior (`status_code < 500` dropped, `status_code >= 500` kept, missing attr kept). Add to `backend/config/tests.py`.
+- [x] Unit tests — `SkipClient4xxTests` (5 cases: drops 404, drops all 4xx incl. 400/401/403/418/429/499, keeps 5xx, boundary at 500, keeps records with no `status_code` attr) + `ProductionLoggingWiringTests` (3 cases: filter registered in `LOGGING['filters']`, attached to `django.request`, level stays WARNING). 75/75 passing including the pre-existing 67.
 - [ ] Local smoke: `envsubst '${domain_name}' < infra/phase3/templates/nginx-site.conf.tftpl` renders cleanly with `$host`/`$request_uri`/`$scheme` preserved; `nginx -t -c /tmp/rendered.conf` in a container/VM validates syntax.
 - [ ] Deploy to prod via merge to main; watch `/wedding-site/django` for the DisallowedHost ERROR count to drop to zero over the following 24h.
 - [ ] Handoff update: HSTS ramp (S19 open item) unblocks once the ERROR count stays quiet for the S15 soak window.
@@ -93,6 +93,7 @@ Both trace back to nginx's `server_name _;` default_server proxying
 - `infra/phase3/templates/nginx-site.conf.tftpl` — full rewrite (see decision 1).
 - `backend/config/log_formatters.py` — appended `SkipClient4xx` class.
 - `backend/config/settings/production.py` — `LOGGING` dict grew `filters` section; `django.request` logger gained `filters: ['skip_client_4xx']`.
+- `backend/config/tests.py` — new `SkipClient4xxTests` (filter behavior) and `ProductionLoggingWiringTests` (LOGGING dict wiring) classes; import of `SkipClient4xx` alongside `JsonFormatter`.
 
 ---
 
