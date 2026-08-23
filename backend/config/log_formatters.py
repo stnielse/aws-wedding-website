@@ -74,3 +74,22 @@ class JsonFormatter(logging.Formatter):
             }
 
         return json.dumps(payload, default=str)
+
+
+class SkipClient4xx(logging.Filter):
+    """Drop 4xx records from the ``django.request`` logger.
+
+    Django emits ``Resolver404`` misses as WARNINGs on ``django.request``
+    with ``status_code=404``. A public origin gets scanned constantly for
+    ``/.env``, ``/wp-admin/*``, and hundreds of appliance paths; the 404s
+    are correct behavior and add nothing actionable. 5xx records still
+    pass -- those are the ones the ``django-errors`` metric filter cares
+    about. Records without ``status_code`` (non-request logs routed
+    through a shared handler) also pass through unchanged.
+    """
+
+    def filter(self, record):
+        status = getattr(record, 'status_code', None)
+        if status is None:
+            return True
+        return status >= 500
