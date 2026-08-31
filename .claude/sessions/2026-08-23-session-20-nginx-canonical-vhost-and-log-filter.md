@@ -83,10 +83,54 @@ Both trace back to nginx's `server_name _;` default_server proxying
 - [x] `backend/config/settings/production.py` — `LOGGING['filters']` section added; filter attached to `django.request`.
 - [x] Unit tests — `SkipClient4xxTests` (5 cases: drops 404, drops all 4xx incl. 400/401/403/418/429/499, keeps 5xx, boundary at 500, keeps records with no `status_code` attr) + `ProductionLoggingWiringTests` (3 cases: filter registered in `LOGGING['filters']`, attached to `django.request`, level stays WARNING). 75/75 passing including the pre-existing 67.
 - [x] Local smoke: envsubst whitelist verified — `diff` shows only the three `${domain_name}` → `kaitlynandsteventietheknot.com` substitutions on lines 17/19/25; `$request_uri` on line 19 (same line as `${domain_name}`) stayed literal, which is the exact load-bearing case for the whitelist form. `docker run --rm -v /tmp/wedding-rendered.conf:/etc/nginx/conf.d/wedding-site.conf:ro nginx:alpine nginx -t` passed.
-- [ ] Deploy to prod via merge to main; watch `/wedding-site/django` for the DisallowedHost ERROR count to drop to zero over the following 24h.
+- [x] Deploy to prod via merge to main. Landed 2026-08-23 23:53:46Z (gunicorn restart line in `/wedding-site/django`). CI deploy path picked up the new nginx template via the S19-added `scripts/deploy.sh` envsubst-render + `wedding-nginx-sync.sh` step; no manual SSM required. Preflight against the live instance (sudoers + envsubst + sync script presence) came back green before the merge.
+- [x] Post-deploy smoke — see [Smoke test results](#smoke-test-results) below.
+- [ ] 24h soak on `/wedding-site/django`: ERROR/CRITICAL count stays at zero, unblocking the S19-carried HSTS ramp. Baseline pre-deploy last-day incidents: 1x DisallowedHost burst (~250 events, 08-21 21:40:54Z); expected post-deploy: 0.
 - [ ] Handoff update: HSTS ramp (S19 open item) unblocks once the ERROR count stays quiet for the S15 soak window.
 
 ---
+
+## Smoke test results
+
+Run from a macOS laptop against the live prod instance and CloudFront
+distribution shortly after the 2026-08-23 23:53:46Z deploy. EC2 hostname
+and log group pulled from `infra/phase3/terraform.tfstate` per the
+"never guess AWS identifiers" rule.
+
+### HTTP behavior — nginx layer
+
+| Test | Expected | Got |
+|---|---|---|
+| Direct-EC2, `Host: ec2-*.compute-1.amazonaws.com` (wrong Host) | 444 / connection close | `Empty reply from server, Closing connection` ✓ default_server catchall firing |
+| Direct-EC2, canonical Host, `GET /.env` | 444 / close | `Empty reply from server, Closing connection` ✓ dotfile location block firing |
+| Direct-EC2, canonical Host, `GET /wp-admin/install.php` | 444 / close | `Empty reply from server, Closing connection` ✓ WP/PHP location block firing |
+| Direct-EC2, canonical Host, `GET /` | 200 | HTTP 200, 16058 bytes, 192ms ✓ canonical vhost serving Django |
+| CloudFront `https://kaitlynandsteventietheknot.com/` | 200 | HTTP 200, 16058 bytes, `server: nginx/1.30.4`, `x-cache: Miss from cloudfront` ✓ real viewers unaffected |
+
+### CloudWatch — Django layer
+
+- **Zero ERROR/CRITICAL events since deploy.** The pre-fix baseline for
+  comparison: 250-event burst 08-21 21:40:54Z (see [Context](#context)).
+- **`SkipClient4xx` filter proven working by pre/post comparison** on
+  the same client behavior (mobile Chrome fetching `/favicon.ico`):
+  - **Pre-deploy 23:52:41Z**: `/favicon.ico` GET produced BOTH an nginx
+    access log line AND a Django JSON WARNING record
+    (`{"level": "WARNING", "logger": "django.request", "message":
+    "Not Found: /favicon.ico"}`).
+  - **Post-deploy 23:55:40Z**: same GET produced ONLY the nginx access
+    log line — no Django WARNING JSON. The filter dropped the 4xx
+    exactly as intended.
+- Real-user traffic confirmed unaffected: mobile Chrome clients fetching
+  `/`, `/rsvp/`, `/registry/` all returned 200 with expected byte
+  counts. Facebot / Twitterbot preview crawlers also hitting `/`
+  cleanly.
+
+### Deploy itself
+
+Gunicorn restart line at 23:53:46Z showed `Starting gunicorn 26.0.0`
+→ three workers booted → post-flight `GET /` returned 200 (deploy.sh's
+`sleep 2 && curl -H "Host: $DOMAIN" http://localhost/` guard). Clean
+green deploy, no rollback triggered by `wedding-nginx-sync.sh`.
 
 ## Files modified this session
 
@@ -129,6 +173,26 @@ CloudWatch check (24h after deploy):
 
 *(Carrying S19 handoff plus new items.)*
 
+- **NEW — CloudWatch `filter-log-events` JSON pattern isn't matching Django
+  JSON records.** Surfaced during S20 smoke tests: `aws logs
+  filter-log-events --filter-pattern '{ $.level = "WARNING" }'`
+  returned 0 events even though the raw event dump (same log group,
+  same time window, no filter) contained WARNING records with
+  `"level": "WARNING"` at the top level of the JSON message.
+  Same pattern shape as the `django-errors` metric filter in
+  `infra/phase3/cloudwatch.tf:96` (`{ ($.level = "ERROR") ||
+  ($.level = "CRITICAL") }`), which HAS fired correctly in the
+  past — so the metric filter itself works; the ad-hoc CLI query
+  didn't. Candidates: (a) shell quoting eating the pattern before
+  it reaches AWS, (b) `filter-log-events` accepting a subtly
+  different pattern syntax than metric filters, (c) some records
+  arriving as non-JSON (mixed with nginx access log lines) and
+  breaking pattern matching for the batch. Not blocking anything —
+  the alarm still works — but ad-hoc CloudWatch queries against
+  JSON fields are useful for future debugging and worth chasing.
+  Small investigation session; deliverable is a runbook snippet
+  (or a `scripts/cloudwatch-*.sh` helper) that reliably queries
+  by JSON field.
 - **NEW — Watch for a scanner wave that patterns past our regex list.**
   The `location ~*` blocks are a starting set (dotfiles + WP/PHP). New
   patterns showing up in the log group after deploy are one-line additions
