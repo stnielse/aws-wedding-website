@@ -119,8 +119,165 @@ The audit surfaced a real gap that the disclosure argues for closing:
 - [x] Negative-control check on the tests — see [Test negative control](#test-negative-control) below.
 - [x] Confirmed `.claude/launch-checklist.md` needs no edit: it contains no direct-to-origin probes (grep for `ec2_public_dns` / `EC2_HOST` / `compute-1` → no hits). The commands this change invalidates live only in the S18/S20 session logs, which are historical records and are left as-written; the replacement method is recorded under follow-ups instead.
 - [x] `terraform plan` reviewed — **the full-workspace plan is unsafe to apply**; see [Digression: pending AMI drift](#digression-pending-ami-drift-wants-to-rebuild-the-instance). Prefix list resolved correctly to `pl-3b927c52` (us-east-1 CloudFront origin-facing).
-- [ ] **Targeted** apply of the SG rules only (command in the digression below).
-- [ ] Post-apply smoke (see [Verification plan](#verification-plan)).
+- [x] **Targeted** apply of the SG rules only — done by user; instance confirmed NOT replaced.
+- [x] Post-apply smoke — all green, see [Smoke test results](#smoke-test-results).
+- [x] Deferred health-pass items from session open (alarm state, log volume) — see [Smoke test results](#smoke-test-results).
+
+---
+
+## Smoke test results
+
+Run 2026-11-18 after the targeted apply.
+
+### The lockdown took effect
+
+| Test | Expected | Got |
+|---|---|---|
+| CloudFront `https://kaitlynandsteventietheknot.com/?cb=…` | 200, origin reachable | **200**, 16058B, `x-cache: Miss from cloudfront` — a cache **Miss** proves a genuine origin fetch, not a stale cache hit ✓ |
+| Direct-to-origin `http://ec2-32-199-50-156…/` | SYN dropped | **`Connection timed out after 8006 ms`** ✓ |
+| All pages (`/`, `/travel/`, `/registry/`, `/rsvp/`, `/gallery/`, `/admin/login/`) | 200, baseline bytes | 200 / 2799 / 2763 / 3849 / 477506 / 4526 — byte-identical to pre-change baseline ✓ |
+
+The direct-to-origin **inversion** is the cleanest signal: S20 recorded
+`Empty reply from server` (nginx answering 444). It is now a connection
+timeout, i.e. the packet never reaches nginx. The 444 catchall is now
+belt-and-suspenders behind the SG, which was the whole point.
+
+### Live AWS state
+
+- `aws ec2 describe-instances` → `i-0856eccaa36b9b73c`, LaunchTime
+  **2026-08-17T14:41:45Z**. Same instance; the AMI drift was correctly
+  excluded by `-target`. EIP held at `32.199.50.156`.
+- `aws ec2 describe-security-group-rules` on `sg-0311d6d70582e7270` →
+  **exactly one inbound rule**: port 80, `PrefixListId: pl-3b927c52`,
+  `CidrIpv4: None`, `CidrIpv6: None`, description "HTTP from CloudFront
+  origin-facing ranges only (Session 21 lockdown)." The 443 rule is gone.
+- `wedding-site-django-errors` alarm: **OK** (last transition
+  2026-08-21T15:47:45, i.e. no state change since before the S20 fix).
+- `/wedding-site/django` retention: 30 days. **0 ERROR/CRITICAL records
+  across the full retained window** (3,841 records scanned via Logs
+  Insights). Note the caveat in the finding below about *how* that was
+  counted.
+
+---
+
+## Digression 2: root cause of the S20 CloudWatch JSON-filter mystery — and a real alarm bug
+
+S20 left an open question: `filter-log-events --filter-pattern '{ $.level
+= "WARNING" }'` returned 0 events against a log group visibly full of
+WARNING records. It was logged as a CLI annoyance. **It is not an
+annoyance — it means the `wedding-site-django-errors` alarm can silently
+miss errors.**
+
+### Evidence
+
+Same log group, same 7-day window:
+
+| Filter | Events |
+|---|---|
+| `"level"` (substring) | **135** |
+| `"WARNING"` (substring) | **135** |
+| `{ $.level = "WARNING" }` (JSON field) | **0** |
+
+Dumping raw events showed why: a single CloudWatch event's `message`
+contains **many newline-concatenated lines** — a Django JSON record
+followed by dozens of gunicorn access lines. CloudWatch JSON filters
+require the *entire event message* to be valid JSON, so `$.level` can
+never match a glued-together event.
+
+### Root cause chain
+
+1. `user_data.sh.tftpl:174-175` starts gunicorn with **both**
+   `--access-logfile -` and `--error-logfile -`, so access and app logs
+   both go to stdout.
+2. `gunicorn.service.tftpl:41-42` sends stdout **and** stderr to the same
+   file, `/var/log/gunicorn/gunicorn.log`.
+3. The CloudWatch agent (config in SSM at
+   `/wedding-site/prod/CLOUDWATCH_AGENT_CONFIG`) tails that file into
+   `/wedding-site/django`. **The agent config itself is fine** — it
+   already routes nginx access/error to their own groups
+   (`/wedding-site/nginx-access`, `/wedding-site/nginx-error`).
+4. Gunicorn's default access format begins with `%(h)s` (remote host).
+   Gunicorn binds a **unix socket**, so there is no peer IP and `%(h)s`
+   renders **empty** — every access line therefore begins with a space
+   (`" - - [12/Nov/2026:00:26:57 +0000] \"GET / HTTP/1.1\" 200 16058 …"`).
+5. The CloudWatch agent treats **whitespace-leading lines as multi-line
+   continuations** of the previous event, so access lines are appended
+   onto whatever preceded them — including Django JSON records.
+6. Result: most Django JSON records are embedded inside a non-JSON event
+   → invisible to every `$.`-style filter, **including the metric filter
+   at `infra/phase3/cloudwatch.tf:96`** that drives the alarm.
+
+### Why S20 concluded the metric filter worked
+
+S20 noted the alarm "HAS fired correctly in the past." Consistent: the
+08-21 DisallowedHost burst produced ~250 Django records in rapid
+succession, enough of which landed as standalone single-line events to
+match. A lone 500 arriving between two access lines would not. So the
+alarm works *intermittently*, which is worse than not working — it looks
+healthy.
+
+### Consequence for the "zero errors" claim
+
+The 0 ERROR/CRITICAL figure above was deliberately **not** obtained with
+the broken JSON pattern. It came from CloudWatch Logs Insights
+(`filter @message like /"level": "(ERROR|CRITICAL)"/`), which matches on
+raw message text and is immune to the batching. 3,841 records scanned,
+0 hits, across the full 30-day retention. So the error count is
+genuinely zero and the HSTS gate is genuinely satisfied — but only as
+far back as retention allows (30 days; the S19/S20 "quiet since
+2026-08-23" span is no longer verifiable, those logs have expired).
+
+### Recommended fix (deferred to its own session)
+
+**Drop `--access-logfile -` from the gunicorn invocation.** It is
+redundant: nginx already logs every request to `/wedding-site/nginx-access`
+with a real `$remote_addr`, which the gunicorn copy cannot even provide.
+Removing it eliminates the leading-space lines, so Django JSON records
+become standalone events, which fixes the metric filter, the alarm, and
+ad-hoc `$.`-field queries all at once — and cuts volume in
+`/wedding-site/django`, continuing S20's noise-reduction thrust.
+
+Note the rollout wrinkle: `scripts/run-gunicorn.sh` is **generated by
+user_data**, not tracked in the repo, so editing the template alone
+changes nothing on the running box. The fix needs both the template edit
+(for future rebuilds) and an on-box edit + `systemctl restart gunicorn`
+via SSM. Worth pairing with the rebuild session, where the template path
+gets boot-tested anyway.
+
+Also worth doing alongside: a Logs Insights helper script, which was
+S20's stated deliverable for this open question. The working query shape
+is recorded above.
+
+---
+
+## Digression 3: new scanner patterns reaching Django
+
+The log dump surfaced a scanner wave (user agents including
+`Mozilla/5.0 (compatible; ReconX-L2S/1.0)` and `curl/8.6.0`) probing
+paths the S20 regex list does **not** cover — all returning 404 from
+Django, i.e. they woke gunicorn:
+
+`/appsettings.json` `/config.json` `/package.json` `/composer.json`
+`/auth.json` `/bun.lock` `/pnpm-lock.yaml` `/package-lock.json`
+`/Dockerfile` `/config.php` `/configuration.php` `/configuration.php.old`
+`/env` `/vendor/` `/node_modules/` `/storage/logs/laravel.log`
+`/telescope/requests` `/_ignition/health-check` `/api/config`
+`/api/settings` `/build/static/js/main.js.map` `/.svn/entries`
+`/.svn/reconx-*` `/www.git/config` `/www.git/HEAD`
+
+Two gaps worth noting in the existing S20 regex:
+
+- `/\.(?:env|git|…)` requires the dot to directly follow a `/`, so
+  **`/www.git/config` does not match** — the scanner is deliberately
+  working around the common dotfile pattern.
+- `.svn` is not in the dotfile alternation at all.
+
+**These arrive via CloudFront, not direct-to-origin** (they carry the
+canonical Host, which is why they reached Django rather than the
+default_server 444). So this session's SG lockdown does **not** reduce
+them — it is an independent follow-up. S20's SkipClient4xx filter is
+working as designed: these produce nginx/gunicorn access lines but no
+Django WARNING records.
 
 ---
 
@@ -283,10 +440,21 @@ rather than coming in through the SG. Next merge to main is the real test.
 - **HSTS ramp** — S19/S20 gated this on the ERROR/CRITICAL filter staying
   quiet. It has been quiet since 2026-08-23 (≈3 months), so the gate is
   satisfied and this is unblocked. Next session candidate.
-- **CloudWatch `filter-log-events` JSON pattern not matching** — carried
-  from S20; deliverable is a `scripts/cloudwatch-*.sh` helper.
+- **RESOLVED (root cause) / NEW (fix pending) — CloudWatch JSON filters
+  and the django-errors alarm.** S20's open question is answered: gunicorn's
+  unix-socket access log emits space-leading lines, which the CloudWatch
+  agent glues onto preceding Django JSON records, breaking every `$.`
+  filter including the metric filter behind the alarm. **This is the
+  highest-value open item in this list** — it is a silent false-negative
+  in the only alarm guarding the site, and it has been that way since
+  the alarm was created. Fix is one flag (`--access-logfile -`) plus an
+  on-box restart; details and the rollout wrinkle in Digression 2.
+  Deliverable also includes the Logs Insights helper S20 asked for.
 - **Watch for scanner waves patterning past the nginx regex list** —
-  carried from S20.
+  carried from S20, and **now concrete**: a live wave is working around
+  the dotfile regex via `/www.git/…`, plus ~24 other uncovered paths.
+  See Digression 3 for the list and the two regex gaps. Arrives via
+  CloudFront, so unaffected by this session's lockdown.
 - **CloudFront WAF managed rules** — still rejected on cost/value.
 - **RDS deletion protection** — flip 2027-01/02.
 - **Auto-invalidation on Photo save** — deferred from S19.
