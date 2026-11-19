@@ -113,12 +113,38 @@ The audit surfaced a real gap that the disclosure argues for closing:
 
 - [x] Session log created (this file).
 - [x] NGINX2ROOT exposure audit — not vulnerable to any of the five (see Context).
-- [ ] `infra/phase3/security_groups.tf` — prefix-list data source added; port 80 repointed; dead 443 rule removed.
-- [ ] `terraform fmt -check` + `terraform validate` clean.
-- [ ] Unit tests — `InfraSecurityGroupTests` written and passing alongside the existing 75.
-- [ ] `terraform plan` reviewed by user (expect: 1 data source read, 1 ingress rule replaced, 1 ingress rule destroyed).
-- [ ] Apply + post-apply smoke (see Verification plan).
-- [ ] Update S20's verification plan — its direct-to-origin curl commands stop working by design after this change.
+- [x] `infra/phase3/security_groups.tf` — prefix-list data source added; port 80 repointed at it; dead 443 rule removed; file-header comment updated.
+- [x] `terraform fmt -check -diff` clean (exit 0) and `terraform validate` → "Success! The configuration is valid."
+- [x] Unit tests — `InfraSecurityGroupTests` (7 cases) in `backend/config/tests.py`. **82/82 passing** (75 pre-existing + 7 new).
+- [x] Negative-control check on the tests — see [Test negative control](#test-negative-control) below.
+- [x] Confirmed `.claude/launch-checklist.md` needs no edit: it contains no direct-to-origin probes (grep for `ec2_public_dns` / `EC2_HOST` / `compute-1` → no hits). The commands this change invalidates live only in the S18/S20 session logs, which are historical records and are left as-written; the replacement method is recorded under follow-ups instead.
+- [ ] `terraform plan` reviewed by user (expect: 1 data source read, 1 ingress rule **replaced**, 1 ingress rule **destroyed**; no changes to the SG itself, RDS SG, or egress).
+- [ ] Apply + post-apply smoke (see [Verification plan](#verification-plan)).
+
+---
+
+## Test negative control
+
+A guardrail test that only ever runs against the fixed config proves
+nothing, so the suite was re-run against the **pre-lockdown** config
+(`git show HEAD:infra/phase3/security_groups.tf`, which has 4
+occurrences of `0.0.0.0/0`) with `_SECURITY_GROUPS_TF` monkeypatched to
+point at it. Result: **4 of 7 failed**, which is the correct outcome.
+
+| Test | vs. old config | Correct? |
+|---|---|---|
+| `test_no_ingress_rule_is_open_to_the_world` | FAIL — `ec2_http, ec2_https` | ✓ bites |
+| `test_http_ingress_is_gated_on_the_cloudfront_prefix_list` | FAIL | ✓ bites |
+| `test_prefix_list_is_resolved_by_name_not_a_hardcoded_id` | FAIL — data source missing | ✓ bites |
+| `test_dead_port_443_ingress_rule_stays_deleted` | FAIL | ✓ bites |
+| `test_parser_found_the_expected_rule_resources` | pass | ✓ anchor — those resources exist in both |
+| `test_ipv6_ingress_stays_closed` | pass | ✓ old config had no IPv6 ingress either |
+| `test_egress_still_allows_outbound` | pass | ✓ egress untouched by this session |
+
+The three that still pass are the ones that *should* pass in both
+states — the vacuity anchor plus two invariants this session did not
+change. The temp file was removed afterwards; nothing in the repo was
+modified to run this.
 
 ---
 
@@ -168,13 +194,16 @@ rather than coming in through the SG. Next merge to main is the real test.
   config (see Context), so this is hygiene rather than urgency, but the
   vulnerable code is installed and should not stay installed. Check
   `dnf check-update nginx` on the box, or watch the ALAS entry.
-- **NEW — direct-to-origin debugging is gone by design.** Several
-  sessions' smoke suites (S18, S20) curl the EC2 public DNS directly.
-  Those commands now time out. The replacement for "is the origin
-  healthy independent of CloudFront" is an SSM `send-command` running
-  `curl -H "Host: $DOMAIN" http://localhost/` on the box. Worth folding
-  into `.claude/launch-checklist.md` so the T-8-weeks wave does not
-  trip over it.
+- **NEW — direct-to-origin debugging is gone by design.** The S18 and S20
+  smoke suites curl the EC2 public DNS directly; those commands now time
+  out. `.claude/launch-checklist.md` was checked and contains no such
+  probe, so nothing in the live operational doc breaks. The replacement
+  for "is the origin healthy independent of CloudFront" is an SSM
+  `send-command` running `curl -H "Host: $DOMAIN" http://localhost/` on
+  the box. If a future session wants an origin-health line in the launch
+  checklist, that is the form it should take — deliberately not added
+  here, since the checklist has never had one and inventing a new
+  checklist item was outside this session's scope.
 - **NEW — SG inbound rule budget is now 55/60.** Any future inbound rule
   on the EC2 SG has 5 slots. If something needs more (or IPv6 origin
   access), request a quota increase on "Inbound or outbound rules per
