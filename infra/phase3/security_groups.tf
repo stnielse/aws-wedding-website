@@ -1,7 +1,8 @@
 # Security groups for the app tier + DB tier.
 #
-#   ec2 SG ── ingress rules added by Session 12 (80/443 from anywhere,
-#             SSM keeps 22 unnecessary — no SSH ingress planned)
+#   ec2 SG ── ingress 80 from the CloudFront origin-facing prefix list
+#             only (Session 21; was 80/443 from anywhere in Session 12).
+#             SSM keeps 22 unnecessary — no SSH ingress planned.
 #   rds SG ── ingress 5432 from ec2 SG only (reference-by-SG, not CIDR)
 #
 # Egress rules declared explicitly. Terraform's aws_security_group used
@@ -33,25 +34,53 @@ resource "aws_vpc_security_group_egress_rule" "ec2_all_out" {
 }
 
 # --------------------------------------------------------------------------
-# EC2 ingress (Session 12) — 80/443 open to the internet. No SSH; SSM
-# Session Manager covers shell access without opening port 22.
+# EC2 ingress (Session 12, locked down in Session 21) — port 80 from the
+# CloudFront origin-facing ranges only. No SSH; SSM Session Manager
+# covers shell access without opening port 22.
+#
+# Session 21 replaced the original 0.0.0.0/0 rule after the NGINX2ROOT
+# disclosure (five nginx RCE CVEs, 2026-11-18). We were not vulnerable to
+# any of the five, but the audit made the point that the S20 nginx
+# `return 444` catchall is not a mitigation for parser-level memory bugs:
+# protocol parsing happens before server_name selection, so nginx never
+# reaches the 444 decision. Keeping the internet off port 80 is the
+# control that actually helps for the next one.
+#
+# The port-443 rule from Session 12 was deleted rather than converted —
+# nothing listens on 443 (nginx declares only `listen 80`) and CloudFront
+# dials plaintext because origin_protocol_policy = "http-only", so it was
+# a dead rule. Deleting it also keeps us inside the rules quota; see the
+# weight note on the data source below.
 # --------------------------------------------------------------------------
+
+# AWS creates and maintains this list; a rule referencing it picks up
+# CloudFront IP-range changes automatically, with no Lambda and no
+# scheduled refresh. (Session 20 deferred this lockdown believing a
+# refresh job was required — that applies to the legacy
+# ip-ranges.json-parsing pattern, not to the AWS-managed list.)
+#
+# Resolved by name, not by a hardcoded pl-* id: the id differs per
+# region. The IPv6 companion list
+# (com.amazonaws.global.ipv6.cloudfront.origin-facing) is deliberately
+# not referenced — this SG has no IPv6 ingress, so IPv6 is already
+# closed by default-deny, and a second list would double the quota
+# weight to buy access nothing needs.
+data "aws_ec2_managed_prefix_list" "cloudfront_origin_facing" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
+# Quota note: a prefix-list reference consumes the list's *published
+# weight* against the "inbound rules per security group" quota
+# (L-0EA8095F, default 60), not its current entry count. This list
+# weighs 55, putting this SG at 55/60 inbound. Any future inbound rule
+# has 5 slots; past that, raise the quota rather than reverting to CIDR.
 resource "aws_vpc_security_group_ingress_rule" "ec2_http" {
   security_group_id = aws_security_group.ec2.id
-  description       = "HTTP from anywhere (Session 12 EIP hit path; Session 13 replaces with CloudFront origin traffic)."
+  description       = "HTTP from CloudFront origin-facing ranges only (Session 21 lockdown)."
   ip_protocol       = "tcp"
   from_port         = 80
   to_port           = 80
-  cidr_ipv4         = "0.0.0.0/0"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "ec2_https" {
-  security_group_id = aws_security_group.ec2.id
-  description       = "HTTPS from anywhere (Session 13+ once CloudFront fronts and terminates TLS; nginx will forward to gunicorn)."
-  ip_protocol       = "tcp"
-  from_port         = 443
-  to_port           = 443
-  cidr_ipv4         = "0.0.0.0/0"
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin_facing.id
 }
 
 # --------------------------------------------------------------------------

@@ -7,7 +7,9 @@ import importlib
 import json
 import logging
 import os
+import re
 import sys
+from pathlib import Path
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -328,3 +330,140 @@ class StorageLocationPrefixTests(SimpleTestCase):
             module.STORAGES['staticfiles']['OPTIONS']['location'],
             'static',
         )
+
+
+# --------------------------------------------------------------------------
+# Infra guardrails (Session 21)
+# --------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SECURITY_GROUPS_TF = _REPO_ROOT / 'infra' / 'phase3' / 'security_groups.tf'
+
+# The AWS-managed prefix list that holds CloudFront's origin-facing ranges.
+# Hardcoded here on purpose: in the test it is the *expected* constant, and
+# the point of the assertion is that security_groups.tf resolves it by this
+# name rather than by a region-specific pl-* id.
+_CLOUDFRONT_PREFIX_LIST_NAME = 'com.amazonaws.global.cloudfront.origin-facing'
+
+
+def _parse_hcl_blocks(text):
+    """Return {(block_type, *labels): body_text} for top-level HCL blocks.
+
+    Deliberately minimal -- just enough to assert on declared intent in
+    security_groups.tf without adding an HCL-parser dependency to the
+    project's pinned requirements. Comment lines are stripped first so a
+    '#'-commented brace cannot throw off the brace matching, and the
+    header regex is anchored at column zero so nested blocks (tags = {})
+    are not picked up as top-level.
+    """
+    stripped = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
+    blocks = {}
+    header = re.compile(r'^([a-z_]+)((?:\s+"[^"]+")*)\s*\{', re.MULTILINE)
+    for match in header.finditer(stripped):
+        labels = tuple(re.findall(r'"([^"]+)"', match.group(2)))
+        depth = 0
+        cursor = match.end() - 1
+        while cursor < len(stripped):
+            if stripped[cursor] == '{':
+                depth += 1
+            elif stripped[cursor] == '}':
+                depth -= 1
+                if depth == 0:
+                    break
+            cursor += 1
+        blocks[(match.group(1),) + labels] = stripped[match.end() : cursor]
+    return blocks
+
+
+class InfraSecurityGroupTests(SimpleTestCase):
+    """Guardrails on infra/phase3/security_groups.tf.
+
+    Session 21 locked EC2 port 80 down to the CloudFront origin-facing
+    prefix list after the NGINX2ROOT disclosure. These assert the declared
+    intent in HCL, which means they run in CI with no AWS credentials and
+    in terraform-destroyed states. They guard the regression most likely
+    to happen silently: someone restoring 0.0.0.0/0 to debug a thing and
+    leaving it there. Live-state verification is the post-apply smoke
+    step, not this.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.source = _SECURITY_GROUPS_TF.read_text()
+        cls.blocks = _parse_hcl_blocks(cls.source)
+        cls.ingress_rules = {
+            labels[-1]: body
+            for labels, body in cls.blocks.items()
+            if labels[:2] == ('resource', 'aws_vpc_security_group_ingress_rule')
+        }
+        cls.egress_rules = {
+            labels[-1]: body
+            for labels, body in cls.blocks.items()
+            if labels[:2] == ('resource', 'aws_vpc_security_group_egress_rule')
+        }
+
+    def test_parser_found_the_expected_rule_resources(self):
+        # If the parser silently matches nothing, every assertion below
+        # passes vacuously. Anchor it.
+        self.assertIn('ec2_http', self.ingress_rules)
+        self.assertIn('rds_from_ec2', self.ingress_rules)
+        self.assertIn('ec2_all_out', self.egress_rules)
+
+    def test_no_ingress_rule_is_open_to_the_world(self):
+        offenders = [name for name, body in self.ingress_rules.items() if '0.0.0.0/0' in body]
+        self.assertEqual(
+            offenders,
+            [],
+            'ingress rule(s) open to 0.0.0.0/0: ' + ', '.join(offenders),
+        )
+
+    def test_http_ingress_is_gated_on_the_cloudfront_prefix_list(self):
+        body = self.ingress_rules['ec2_http']
+        self.assertIn('from_port         = 80', body)
+        self.assertIn(
+            'data.aws_ec2_managed_prefix_list.cloudfront_origin_facing.id',
+            body,
+        )
+        # prefix_list_id and cidr_ipv4 are mutually exclusive in this
+        # resource; a stray cidr_ipv4 would mean the lockdown was undone.
+        self.assertNotIn('cidr_ipv4', body)
+
+    def test_prefix_list_is_resolved_by_name_not_a_hardcoded_id(self):
+        data_block = self.blocks.get(
+            ('data', 'aws_ec2_managed_prefix_list', 'cloudfront_origin_facing')
+        )
+        self.assertIsNotNone(
+            data_block,
+            'the CloudFront managed prefix list data source is missing',
+        )
+        self.assertIn(_CLOUDFRONT_PREFIX_LIST_NAME, data_block)
+        # pl-* ids differ per region, so a literal one here is a bug.
+        self.assertIsNone(
+            re.search(r'"pl-[0-9a-f]+"', self.source),
+            'hardcoded prefix-list id found; resolve it by name instead',
+        )
+
+    def test_dead_port_443_ingress_rule_stays_deleted(self):
+        self.assertNotIn('ec2_https', self.ingress_rules)
+        # Nothing listens on 443 on the box (nginx declares only
+        # `listen 80`) and CloudFront dials plaintext via
+        # origin_protocol_policy = "http-only". Re-adding a 443 rule
+        # would also push the SG past its 60-rule quota, since the
+        # prefix list weighs 55.
+        for name, body in self.ingress_rules.items():
+            self.assertNotIn('= 443', body, f'{name} re-opens port 443')
+
+    def test_ipv6_ingress_stays_closed(self):
+        # nginx has `listen [::]:80`, but no IPv6 ingress rule exists so
+        # it is unreachable from outside. Adding the IPv6 companion
+        # prefix list would double the quota weight to 110 (> 60).
+        for name, body in self.ingress_rules.items():
+            self.assertNotIn('cidr_ipv6', body, f'{name} opens IPv6 ingress')
+
+    def test_egress_still_allows_outbound(self):
+        # SSM, dnf updates, S3, RDS and the CloudWatch agent are all
+        # outbound. A future over-zealous lockdown that clamps egress
+        # would cut the deploy path; this is the canary for that.
+        self.assertIn('0.0.0.0/0', self.egress_rules['ec2_all_out'])
+        self.assertIn('ip_protocol       = "-1"', self.egress_rules['ec2_all_out'])
