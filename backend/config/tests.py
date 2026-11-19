@@ -356,9 +356,7 @@ def _parse_hcl_blocks(text):
     header regex is anchored at column zero so nested blocks (tags = {})
     are not picked up as top-level.
     """
-    stripped = '\n'.join(
-        line for line in text.splitlines() if not line.lstrip().startswith('#')
-    )
+    stripped = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
     blocks = {}
     header = re.compile(r'^([a-z_]+)((?:\s+"[^"]+")*)\s*\{', re.MULTILINE)
     for match in header.finditer(stripped):
@@ -373,7 +371,7 @@ def _parse_hcl_blocks(text):
                 if depth == 0:
                     break
             cursor += 1
-        blocks[(match.group(1),) + labels] = stripped[match.end():cursor]
+        blocks[(match.group(1),) + labels] = stripped[match.end() : cursor]
     return blocks
 
 
@@ -413,9 +411,7 @@ class InfraSecurityGroupTests(SimpleTestCase):
         self.assertIn('ec2_all_out', self.egress_rules)
 
     def test_no_ingress_rule_is_open_to_the_world(self):
-        offenders = [
-            name for name, body in self.ingress_rules.items() if '0.0.0.0/0' in body
-        ]
+        offenders = [name for name, body in self.ingress_rules.items() if '0.0.0.0/0' in body]
         self.assertEqual(
             offenders,
             [],
