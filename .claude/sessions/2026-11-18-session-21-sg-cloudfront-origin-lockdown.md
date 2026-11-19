@@ -118,8 +118,66 @@ The audit surfaced a real gap that the disclosure argues for closing:
 - [x] Unit tests — `InfraSecurityGroupTests` (7 cases) in `backend/config/tests.py`. **82/82 passing** (75 pre-existing + 7 new).
 - [x] Negative-control check on the tests — see [Test negative control](#test-negative-control) below.
 - [x] Confirmed `.claude/launch-checklist.md` needs no edit: it contains no direct-to-origin probes (grep for `ec2_public_dns` / `EC2_HOST` / `compute-1` → no hits). The commands this change invalidates live only in the S18/S20 session logs, which are historical records and are left as-written; the replacement method is recorded under follow-ups instead.
-- [ ] `terraform plan` reviewed by user (expect: 1 data source read, 1 ingress rule **replaced**, 1 ingress rule **destroyed**; no changes to the SG itself, RDS SG, or egress).
-- [ ] Apply + post-apply smoke (see [Verification plan](#verification-plan)).
+- [x] `terraform plan` reviewed — **the full-workspace plan is unsafe to apply**; see [Digression: pending AMI drift](#digression-pending-ami-drift-wants-to-rebuild-the-instance). Prefix list resolved correctly to `pl-3b927c52` (us-east-1 CloudFront origin-facing).
+- [ ] **Targeted** apply of the SG rules only (command in the digression below).
+- [ ] Post-apply smoke (see [Verification plan](#verification-plan)).
+
+---
+
+## Digression: pending AMI drift wants to rebuild the instance
+
+The first `terraform plan` of this session came back **3 to add, 1 to
+change, 4 to destroy** — not the 1/0/2 this session's change accounts
+for. The extra churn is **pre-existing drift, unrelated to the SG work**,
+and it includes `aws_instance.web must be replaced`.
+
+**Cause.** `ec2.tf:30` resolves the AMI from the AWS-published SSM
+parameter `/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64`.
+Amazon updates that parameter on every new AL2023 AMI publication, and
+`ami` is a ForceNew attribute on `aws_instance`. The last apply was
+~2026-08-23, so the parameter has moved and **every apply from now on
+wants to rebuild the box** until this is dealt with.
+
+**Not the cause:** the large `user_data_base64` diff in the plan.
+`user_data_replace_on_change = false` (ec2.tf:62) is set deliberately
+(rationale at ec2.tf:25-28), so the drifted bootstrap script does not
+force replacement on its own. It drifted because S20's nginx template is
+embedded in `user_data` and S20 shipped that change via `deploy.sh` /
+`wedding-nginx-sync.sh` rather than by rebuilding. The follow-on
+`aws_eip_association.web` replacement and `aws_iam_role_policy.github_deploy`
+update are both just consequences of the instance id/ARN changing.
+
+**Resolution for this session: targeted apply.** `-target` is normally a
+smell, but this is its legitimate use — shipping a narrow intended change
+while unrelated drift sits pending:
+
+```bash
+terraform -chdir=infra/phase3 apply \
+  -target=aws_vpc_security_group_ingress_rule.ec2_http \
+  -target=aws_vpc_security_group_ingress_rule.ec2_https
+```
+
+Expect `1 to add, 0 to change, 2 to destroy` and no mention of
+`aws_instance.web`.
+
+**Why not just take the rebuild now.** Blast radius is genuinely bounded
+— Postgres is on RDS, media is on S3, and ec2.tf:9-12 deliberately keeps
+the EIP outside the instance lifecycle so a replacement retains
+`32.199.50.156` and CloudFront's origin does not move. A previous session
+clearly anticipated AMI-bump replacement. Even so, deferred because:
+
+1. **It buys nothing for NGINX2ROOT.** AL2023's nginx is still Pending
+   Fix, so a fresh AMI today ships the same vulnerable 1.30.4.
+2. **`user_data` has not been boot-tested in its current form.** It has
+   drifted since S20, and the last end-to-end exercise of the bootstrap
+   was S16 — a session that exists *because* bootstrap broke.
+3. Downtime is a full cloud-init cycle (dnf, pip, clone, migrate,
+   collectstatic), with CloudFront erroring on uncached paths — not
+   something to absorb incidentally during an urgent security session.
+
+The right vehicle is a deliberate rebuild session once AL2023 publishes
+the nginx fix: that bundles the OS patches, the nginx patch, and a real
+boot-test of `user_data` under an agenda where all three are the point.
 
 ---
 
@@ -189,6 +247,20 @@ rather than coming in through the SG. Next merge to main is the real test.
 
 *(Carrying S20 handoff plus new items.)*
 
+- **NEW — deliberate instance-rebuild session.** Pairs with the nginx
+  patch below. Agenda: boot-test the drifted `user_data`, take the ~3
+  months of accumulated AL2023 OS patches, confirm the EIP survives the
+  replacement as ec2.tf:9-12 intends, and verify the rebuilt box comes
+  up with the Session 21 SG in place. Until this happens, **every
+  `terraform apply` in phase3 must be `-target`ed**, or it will rebuild
+  the instance as a side effect. See the digression above.
+- **NEW — decide whether to keep tracking the `-latest` AMI parameter.**
+  Tracking it means never silently running a stale AMI, at the cost of
+  never having a clean `plan` and of every apply carrying an implicit
+  instance rebuild. The alternative is pinning the AMI id in a variable
+  and bumping it intentionally (which fits this repo's strict-version-pin
+  convention better). Not urgent, but the current setup is a foot-gun
+  that this session tripped over, and it will trip the next one too.
 - **NEW — patch nginx to 1.30.7 when AL2023 ships it.** Currently
   "Pending Fix" in ALAS for CVE-2026-123007. Not reachable in our
   config (see Context), so this is hygiene rather than urgency, but the
